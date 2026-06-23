@@ -1,0 +1,21 @@
+# Optional: Local SearXNG instance for standalone search capabilities.
+# If you don't already have a SearXNG endpoint, you can spin this up.
+# The MCP server will target http://127.0.0.1:8088 by default.
+services:
+  searxng:
+    image: docker.io/searxng/searxng:2026.5.5-0ac5254b8
+    container_name: web-basics-searxng
+    restart: unless-stopped
+    ports:
+      # Exposing to the host so the local Bun process can hit it
+      - "127.0.0.1:8088:8080"
+    environment:
+      SEARXNG_SECRET: "web-basics-mcp-internal-secret-key-replace-in-prod"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
