@@ -27,77 +27,40 @@ docker compose up -d
 
 Starts a local SearXNG instance at `127.0.0.1:8088`. If you already have one, set the `SEARXNG_URL` env var instead.
 
-## Configuration
+## Install
 
-Add to your MCP client config (replace the path with your actual path to the repo):
-
-<details>
-<summary><strong>Claude Desktop</strong></summary>
-
-`~/.claude/claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "web-basics": {
-      "command": "node",
-      "args": ["/path/to/web-basics-mcp/build/index.js"]
-    }
-  }
-}
-```
-</details>
-
-<details>
-<summary><strong>Cursor</strong></summary>
-
-`Cursor Settings > General > MCP > Add new MCP Server`:
-```json
-{
-  "command": "node",
-  "args": ["/path/to/web-basics-mcp/build/index.js"]
-}
-```
-</details>
-
-<details>
-<summary><strong>VS Code Copilot</strong></summary>
-
-`.vscode/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "web-basics": {
-      "command": "node",
-      "args": ["/path/to/web-basics-mcp/build/index.js"]
-    }
-  }
-}
-```
-</details>
+Replace `~/web-basics-mcp` with wherever you cloned the repo.
 
 <details>
 <summary><strong>Claude Code</strong></summary>
 
-`~/.claude/settings.json`:
-```json
-{
-  "mcpServers": {
-    "web-basics": {
-      "command": "node",
-      "args": ["/path/to/web-basics-mcp/build/index.js"]
-    }
-  }
-}
+```bash
+claude mcp add web-basics -- node ~/web-basics-mcp/build/index.js
 ```
 </details>
 
 <details>
-<summary><strong>Other clients</strong></summary>
+<summary><strong>Codex</strong></summary>
+
+```bash
+codex mcp add web-basics -- node ~/web-basics-mcp/build/index.js
+```
+</details>
+
+<details>
+<summary><strong>OpenCode</strong></summary>
+
+Add to your `opencode.json` (usually `~/.config/opencode/opencode.json`):
 
 ```json
 {
-  "command": "node",
-  "args": ["/path/to/web-basics-mcp/build/index.js"]
+  "mcp": {
+    "web-basics": {
+      "type": "local",
+      "command": ["node", "~/web-basics-mcp/build/index.js"],
+      "enabled": true
+    }
+  }
 }
 ```
 </details>
