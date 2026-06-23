@@ -2,17 +2,54 @@
   "name": "web-basics-mcp",
   "version": "1.0.0",
   "description": "Self-hosted MCP server for web search and fetching",
+  "license": "MIT",
+  "author": "Yash Khurana",
   "type": "module",
+  "bin": {
+    "web-basics-mcp": "./build/index.js"
+  },
+  "main": "./build/index.js",
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE",
+    "compose.yml",
+    "searxng/settings.yml",
+    ".env.example"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yoloyash/web-basics-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yoloyash/web-basics-mcp/issues"
+  },
+  "homepage": "https://github.com/yoloyash/web-basics-mcp#readme",
+  "keywords": [
+    "mcp",
+    "searxng",
+    "web-search",
+    "fetch",
+    "reddit"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "tsc",
+    "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('build', { recursive: true, force: true });\"",
+    "build": "npm run clean && tsc",
     "start": "node build/index.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "defuddle": "latest",
+    "defuddle": "^0.19.0",
+    "dotenv": "^17.2.3",
     "ipaddr.js": "^2.2.0",
     "linkedom": "^0.18.5",
+    "rss-parser": "^3.13.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

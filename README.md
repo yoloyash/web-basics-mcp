@@ -1,35 +1,58 @@
 # web-basics-mcp
 
-A self-hosted MCP server for web search and fetching. Runs entirely on your machine — no API keys, no accounts, no external calls.
+A tiny MCP server that gives agents basic web tools without API keys.
 
-## What it is
+It can search the web through SearXNG, fetch readable page content, and pull Reddit threads from RSS.
 
-Runs as a local MCP server over stdio. It exposes two tools to your AI:
+## Tools
 
-- **`web_search`** — Sends your query to a local SearXNG instance and returns a list of results (title, link, snippet).
-- **`fetch_url`** — Fetches a webpage, strips it down to clean markdown, and returns the content.
+- **`web_search`** - Search the web with SearXNG.
+- **`fetch_url`** - Fetch a page and turn it into readable markdown.
+- **`reddit_search`** - Find Reddit posts.
+- **`reddit_fetch`** - Fetch a Reddit post and its comments.
 
-The SearXNG backend runs in Docker by default, but you can point it at any existing SearXNG instance via the `SEARXNG_URL` env var. The fetch tool has SSRF protection — it validates domains, resolves IPs, and blocks any request to private or reserved ranges.
+## Requirements
+
+- Node.js 20 or newer
+- npm
+- Docker, only if you want to run the optional local SearXNG backend
 
 ## Setup
 
 ```bash
-git clone https://github.com/yourusername/web-basics-mcp.git
+git clone https://github.com/yoloyash/web-basics-mcp.git
 cd web-basics-mcp
-npm install && npm run build
+npm install
+npm run build
 ```
 
-Optional — start the search backend:
+Optional: copy the example environment file if you want to change the search backend.
+
+```bash
+cp .env.example .env
+```
+
+By default, the server uses `http://127.0.0.1:8088` for SearXNG. You can set `SEARXNG_URL` in your shell, your MCP client config, or a local `.env` file.
+
+## Search Backend
+
+To start the bundled local SearXNG service:
 
 ```bash
 docker compose up -d
 ```
 
-Starts a local SearXNG instance at `127.0.0.1:8088`. If you already have one, set the `SEARXNG_URL` env var instead.
+That exposes SearXNG at `http://127.0.0.1:8088`. Stop it with:
 
-## Install
+```bash
+docker compose down
+```
 
-Replace `~/web-basics-mcp` with wherever you cloned the repo.
+You can also point `SEARXNG_URL` at any existing SearXNG instance that has JSON output enabled.
+
+## Install In MCP Clients
+
+Replace `~/web-basics-mcp` with the path where you cloned this repo.
 
 <details>
 <summary><strong>Claude Code</strong></summary>
@@ -50,7 +73,7 @@ codex mcp add web-basics -- node ~/web-basics-mcp/build/index.js
 <details>
 <summary><strong>OpenCode</strong></summary>
 
-Add to your `opencode.json` (usually `~/.config/opencode/opencode.json`):
+Add this to your `opencode.json`, usually at `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -64,3 +87,19 @@ Add to your `opencode.json` (usually `~/.config/opencode/opencode.json`):
 }
 ```
 </details>
+
+## Development
+
+```bash
+npm run build
+npm test
+```
+
+## Behavior
+
+- The server runs as a local MCP server over stdio.
+- Search uses the SearXNG instance configured by `SEARXNG_URL`.
+- `fetch_url` only supports public HTTP(S) pages and blocks private/local addresses.
+- Reddit support uses Reddit's RSS feed, so it may return fewer comments than the full website.
+- Returned webpage and Reddit content is capped to keep MCP responses manageable.
+- Search quality depends on the engines enabled in your SearXNG configuration.

@@ -4,6 +4,7 @@ import { lookup } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
+import { classifyError, validationError } from "./errors.js";
 
 const MAX_CONTENT_CHARS = 8000;
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
@@ -18,7 +19,7 @@ export default function registerFetchUrl(server: McpServer) {
     async ({ url }) => {
       try {
         const { res, finalUrl } = await fetchSafe(url);
-        if (!res.ok) throw new Error(`status ${res.status}`);
+        if (!res.ok) throw new Error(`HTTP status ${res.status}`);
 
         assertReadableContentType(res);
         const html = await readTextCapped(res);
@@ -44,8 +45,9 @@ export default function registerFetchUrl(server: McpServer) {
             },
           ],
         };
-      } catch (err: any) {
-        return { content: [{ type: "text", text: `Fetch error: ${err.message}` }], isError: true };
+      } catch (err) {
+        const { category, message } = classifyError(err);
+        return { content: [{ type: "text", text: `${category}: ${message}` }], isError: true };
       }
     },
   );
@@ -76,23 +78,25 @@ async function validatePublicHttpUrl(rawUrl: string): Promise<URL> {
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new Error("Invalid URL");
+    throw validationError("Invalid URL");
   }
 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Unsupported protocol");
+    throw validationError("Unsupported protocol");
   }
   if (url.username || url.password) {
-    throw new Error("Credentials not allowed");
+    throw validationError("Credentials not allowed");
   }
 
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local")) {
-    throw new Error("Private hostnames not allowed");
+    throw validationError("Private hostnames not allowed");
   }
 
   const records = await lookup(hostname, { all: true, verbatim: true }).catch(() => []);
-  if (records.length === 0) throw new Error("DNS resolution failed");
+  if (records.length === 0) {
+    throw validationError("DNS resolution failed");
+  }
   if (
     records.some((r) => {
       try {
@@ -102,7 +106,7 @@ async function validatePublicHttpUrl(rawUrl: string): Promise<URL> {
       }
     })
   ) {
-    throw new Error("Private address resolved");
+    throw validationError("Private address resolved");
   }
 
   return url;
