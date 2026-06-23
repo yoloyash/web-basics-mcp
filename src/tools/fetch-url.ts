@@ -2,9 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { lookup } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
-import { parseHTML } from "linkedom";
-import { Defuddle } from "defuddle/node";
 import { classifyError, validationError } from "./errors.js";
+import { extractReadableMarkdown } from "./extract-readable.js";
 
 const MAX_CONTENT_CHARS = 8000;
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
@@ -24,9 +23,8 @@ export default function registerFetchUrl(server: McpServer) {
         assertReadableContentType(res);
         const html = await readTextCapped(res);
 
-        const { document } = parseHTML(html);
-        const result = await Defuddle(document as unknown as Document, finalUrl, { markdown: true });
-        const content = (result.content ?? "").slice(0, MAX_CONTENT_CHARS);
+        const result = extractReadableMarkdown(html, finalUrl);
+        const content = result.content.slice(0, MAX_CONTENT_CHARS);
 
         return {
           content: [
@@ -37,7 +35,8 @@ export default function registerFetchUrl(server: McpServer) {
                   url: finalUrl,
                   title: result.title ?? finalUrl,
                   content,
-                  wordCount: result.wordCount ?? 0,
+                  wordCount: result.wordCount,
+                  extractor: result.extractor,
                 },
                 null,
                 2,
