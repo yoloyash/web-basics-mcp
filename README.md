@@ -13,20 +13,23 @@ The SearXNG backend runs in Docker by default, but you can point it at any exist
 
 ## Setup
 
-Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/repos/web-basics-mcp`).
+```bash
+git clone https://github.com/yourusername/web-basics-mcp.git
+cd web-basics-mcp
+npm install && npm run build
+```
 
-1. Install dependencies:
-   ```bash
-   cd $PROJECT_DIR && bun install
-   ```
+Optional — start the search backend:
 
-2. Start the search backend (optional):
-   ```bash
-   docker compose up -d
-   ```
-   Starts a local SearXNG instance at `127.0.0.1:8088`. If you already have a SearXNG server, set the `SEARXNG_URL` env var instead.
+```bash
+docker compose up -d
+```
 
-3. Add to your MCP client config:
+Starts a local SearXNG instance at `127.0.0.1:8088`. If you already have one, set the `SEARXNG_URL` env var instead.
+
+## Configuration
+
+Add to your MCP client config (replace the path with your actual path to the repo):
 
 <details>
 <summary><strong>Claude Desktop</strong></summary>
@@ -36,8 +39,8 @@ Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/re
 {
   "mcpServers": {
     "web-basics": {
-      "command": "bun",
-      "args": ["$PROJECT_DIR/src/index.ts"]
+      "command": "node",
+      "args": ["/path/to/web-basics-mcp/build/index.js"]
     }
   }
 }
@@ -50,8 +53,8 @@ Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/re
 `Cursor Settings > General > MCP > Add new MCP Server`:
 ```json
 {
-  "command": "bun",
-  "args": ["$PROJECT_DIR/src/index.ts"]
+  "command": "node",
+  "args": ["/path/to/web-basics-mcp/build/index.js"]
 }
 ```
 </details>
@@ -64,8 +67,8 @@ Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/re
 {
   "mcpServers": {
     "web-basics": {
-      "command": "bun",
-      "args": ["$PROJECT_DIR/src/index.ts"]
+      "command": "node",
+      "args": ["/path/to/web-basics-mcp/build/index.js"]
     }
   }
 }
@@ -80,8 +83,8 @@ Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/re
 {
   "mcpServers": {
     "web-basics": {
-      "command": "bun",
-      "args": ["$PROJECT_DIR/src/index.ts"]
+      "command": "node",
+      "args": ["/path/to/web-basics-mcp/build/index.js"]
     }
   }
 }
@@ -93,10 +96,8 @@ Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/re
 
 ```json
 {
-  "command": "bun",
-  "args": ["$PROJECT_DIR/src/index.ts"]
+  "command": "node",
+  "args": ["/path/to/web-basics-mcp/build/index.js"]
 }
 ```
 </details>
-
-
