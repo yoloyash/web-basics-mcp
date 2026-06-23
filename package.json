@@ -1,7 +1,7 @@
 {
   "name": "web-basics-mcp",
   "version": "1.0.0",
-  "description": "Unified MCP Server for Web Search and Content Fetching (Bun optimized)",
+  "description": "Self-hosted MCP server for web search and fetching",
   "type": "module",
   "scripts": {
     "start": "bun src/index.ts",
