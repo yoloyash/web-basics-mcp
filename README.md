@@ -13,9 +13,11 @@ The SearXNG backend runs in Docker by default, but you can point it at any exist
 
 ## Setup
 
+Replace `$PROJECT_DIR` with the absolute path to this repo (e.g., `/home/user/repos/web-basics-mcp`).
+
 1. Install dependencies:
    ```bash
-   bun install
+   cd $PROJECT_DIR && bun install
    ```
 
 2. Start the search backend (optional):
@@ -25,15 +27,76 @@ The SearXNG backend runs in Docker by default, but you can point it at any exist
    Starts a local SearXNG instance at `127.0.0.1:8088`. If you already have a SearXNG server, set the `SEARXNG_URL` env var instead.
 
 3. Add to your MCP client config:
-   ```json
-   {
-     "mcpServers": {
-       "web-basics": {
-         "command": "bun",
-         "args": ["/path/to/web-basics-mcp/src/index.ts"]
-       }
-     }
-   }
-   ```
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+`~/.claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "web-basics": {
+      "command": "bun",
+      "args": ["$PROJECT_DIR/src/index.ts"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+`Cursor Settings > General > MCP > Add new MCP Server`:
+```json
+{
+  "command": "bun",
+  "args": ["$PROJECT_DIR/src/index.ts"]
+}
+```
+</details>
+
+<details>
+<summary><strong>VS Code Copilot</strong></summary>
+
+`.vscode/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "web-basics": {
+      "command": "bun",
+      "args": ["$PROJECT_DIR/src/index.ts"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+`~/.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "web-basics": {
+      "command": "bun",
+      "args": ["$PROJECT_DIR/src/index.ts"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Other clients</strong></summary>
+
+```json
+{
+  "command": "bun",
+  "args": ["$PROJECT_DIR/src/index.ts"]
+}
+```
+</details>
 
 
