@@ -7,7 +7,7 @@ It can search the web through SearXNG, fetch readable page content, and pull Red
 ## Tools
 
 - **`web_search`** - Search the web with SearXNG.
-- **`fetch_url`** - Fetch a page and turn it into readable markdown.
+- **`fetch_url`** - Fetch a page or PDF and turn it into readable markdown.
 - **`reddit_search`** - Find Reddit posts.
 - **`reddit_fetch`** - Fetch a Reddit post and its comments.
 
@@ -101,5 +101,5 @@ npm test
 - Search uses the SearXNG instance configured by `SEARXNG_URL`.
 - `fetch_url` only supports public HTTP(S) pages and blocks private/local addresses.
 - Reddit support uses Reddit's RSS feed, so it may return fewer comments than the full website.
-- Returned webpage and Reddit content is capped to keep MCP responses manageable.
+- Returned content is capped to keep MCP responses manageable.
 - Search quality depends on the engines enabled in your SearXNG configuration.

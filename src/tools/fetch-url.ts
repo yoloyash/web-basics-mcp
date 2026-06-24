@@ -3,44 +3,53 @@ import { z } from "zod";
 import { lookup } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { classifyError, validationError } from "./errors.js";
-import { extractReadableMarkdown } from "./extract-readable.js";
+import { extractFetchedContent, fetchByteLimitForContentType } from "./extract-content.js";
 
 const MAX_CONTENT_CHARS = 8000;
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
+const MAX_PDF_FETCH_BYTES = 15 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 10000;
 
 export default function registerFetchUrl(server: McpServer) {
   server.tool(
     "fetch_url",
-    "Fetch URL and extract clean markdown.",
+    "Fetch URL and extract clean markdown from web pages or PDFs.",
     { url: z.string().url().describe("Target URL") },
     async ({ url }) => {
       try {
         const { res, finalUrl } = await fetchSafe(url);
         if (!res.ok) throw new Error(`HTTP status ${res.status}`);
 
-        assertReadableContentType(res);
-        const html = await readTextCapped(res);
+        const responseContentType = res.headers.get("content-type");
+        const body = await readBytesCapped(
+          res,
+          fetchByteLimitForContentType(responseContentType, MAX_FETCH_BYTES, MAX_PDF_FETCH_BYTES),
+        );
 
-        const result = extractReadableMarkdown(html, finalUrl);
+        const result = await extractFetchedContent(body, finalUrl, responseContentType);
         const content = result.content.slice(0, MAX_CONTENT_CHARS);
+        const payload: Record<string, unknown> = {
+          url: finalUrl,
+          title: result.title,
+          content,
+          wordCount: result.wordCount,
+          contentType: result.contentType,
+          truncated: result.content.length > MAX_CONTENT_CHARS,
+          extractor: result.extractor,
+        };
+
+        if ("pageCount" in result) {
+          payload.pageCount = result.pageCount;
+          payload.metadata = result.metadata;
+          payload.links = result.links;
+        }
 
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                {
-                  url: finalUrl,
-                  title: result.title ?? finalUrl,
-                  content,
-                  wordCount: result.wordCount,
-                  extractor: result.extractor,
-                },
-                null,
-                2,
-              ),
+              text: JSON.stringify(payload, null, 2),
             },
           ],
         };
@@ -111,17 +120,10 @@ async function validatePublicHttpUrl(rawUrl: string): Promise<URL> {
   return url;
 }
 
-function assertReadableContentType(res: Response): void {
-  const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
-  if (!contentType) return;
-  if (contentType.startsWith("text/") || contentType.includes("html") || contentType.includes("xml")) return;
-  throw new Error(`Unsupported content-type: ${contentType}`);
-}
-
-async function readTextCapped(res: Response): Promise<string> {
+async function readBytesCapped(res: Response, maxBytes: number): Promise<Uint8Array> {
   const declaredLength = Number(res.headers.get("content-length") ?? 0);
-  if (declaredLength > MAX_FETCH_BYTES) throw new Error("Body too large");
-  if (!res.body) return "";
+  if (declaredLength > maxBytes) throw new Error("Body too large");
+  if (!res.body) return new Uint8Array();
 
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -131,7 +133,7 @@ async function readTextCapped(res: Response): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_FETCH_BYTES) {
+    if (total > maxBytes) {
       await reader.cancel();
       throw new Error("Body too large");
     }
@@ -144,5 +146,5 @@ async function readTextCapped(res: Response): Promise<string> {
     body.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder("utf-8", { fatal: false }).decode(body);
+  return body;
 }
