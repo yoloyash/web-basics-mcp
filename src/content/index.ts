@@ -1,11 +1,26 @@
 import { extractPdfMarkdown, type PdfMarkdown } from "./pdf.js";
 import { extractReadableMarkdown, type ReadableMarkdown } from "./html.js";
 
-export type ExtractedContent = (ReadableMarkdown | PdfMarkdown) & {
+type ExtractedReadableContent = (ReadableMarkdown | PdfMarkdown) & {
   contentType: string;
 };
 
+export interface ExtractedImageContent {
+  data: Uint8Array;
+  byteLength: number;
+  contentType: string;
+  extractor: "image";
+}
+
+export type ExtractedContent = ExtractedReadableContent | ExtractedImageContent;
+
 const PDF_MAGIC = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
+const SUPPORTED_IMAGE_CONTENT_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 export async function extractFetchedContent(
   data: Uint8Array,
@@ -18,6 +33,15 @@ export async function extractFetchedContent(
     return {
       ...(await extractPdfMarkdown(data, finalUrl)),
       contentType: "application/pdf",
+    };
+  }
+
+  if (isSupportedImageContentType(contentType)) {
+    return {
+      data,
+      byteLength: data.byteLength,
+      contentType,
+      extractor: "image",
     };
   }
 
@@ -37,7 +61,9 @@ export function fetchByteLimitForContentType(
   pdfByteLimit: number,
 ): number {
   const contentType = normalizeContentType(contentTypeHeader);
-  return contentType && isReadableContentType(contentType) && !isPdfContentType(contentType)
+  return contentType &&
+    (isSupportedImageContentType(contentType) ||
+      (isReadableContentType(contentType) && !isPdfContentType(contentType)))
     ? readableByteLimit
     : pdfByteLimit;
 }
@@ -48,6 +74,10 @@ function normalizeContentType(contentTypeHeader?: string | null): string {
 
 function isPdfContentType(contentType: string): boolean {
   return contentType === "application/pdf" || contentType.endsWith("+pdf");
+}
+
+function isSupportedImageContentType(contentType: string): boolean {
+  return SUPPORTED_IMAGE_CONTENT_TYPES.has(contentType);
 }
 
 function isReadableContentType(contentType: string): boolean {

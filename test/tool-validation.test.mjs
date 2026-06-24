@@ -28,6 +28,7 @@ test("registers the expected tools", async () => {
   const fetchTool = tools.find((tool) => tool.name === "fetch_url");
   assert.ok(fetchTool);
   assert.match(fetchTool.description, /PDF/);
+  assert.match(fetchTool.description, /images/);
 });
 
 test("web_search rejects blank queries before calling SearXNG", async () => {
