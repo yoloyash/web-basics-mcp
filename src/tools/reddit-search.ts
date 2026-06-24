@@ -22,13 +22,15 @@ interface RedditPostUrl {
 }
 
 export default function registerRedditSearch(server: McpServer) {
-  server.tool(
+  server.registerTool(
     "reddit_search",
-    "Search Reddit for posts. Returns post links and discovery metadata. Use reddit_fetch to fetch comments.",
     {
-      query: z.string().describe("Search query"),
-      subreddit: z.string().optional().describe("Optional subreddit to restrict search to (e.g., programming, AskReddit)"),
-      limit: z.number().int().min(1).max(25).default(10).describe("Result limit (max 25)"),
+      description: "Search Reddit for posts. Returns post links and discovery metadata. Use reddit_fetch to fetch comments.",
+      inputSchema: {
+        query: z.string().describe("Search query"),
+        subreddit: z.string().optional().describe("Optional subreddit to restrict search to (e.g., programming, AskReddit)"),
+        limit: z.number().int().min(1).max(25).default(10).describe("Result limit (max 25)"),
+      },
     },
     async ({ query, subreddit, limit }) => {
       try {

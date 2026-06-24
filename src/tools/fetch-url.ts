@@ -12,10 +12,12 @@ const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 10000;
 
 export default function registerFetchUrl(server: McpServer) {
-  server.tool(
+  server.registerTool(
     "fetch_url",
-    "Fetch URL and extract clean markdown from web pages or PDFs.",
-    { url: z.string().url().describe("Target URL") },
+    {
+      description: "Fetch URL and extract clean markdown from web pages or PDFs.",
+      inputSchema: { url: z.string().url().describe("Target URL") },
+    },
     async ({ url }) => {
       try {
         const { res, finalUrl } = await fetchSafe(url);

@@ -15,18 +15,20 @@ const MAX_CACHE_ENTRIES = 100;
 const postCache = new Map<string, { expiresAt: number; result: RedditFetchResult }>();
 
 export default function registerRedditFetch(server: McpServer) {
-  server.tool(
+  server.registerTool(
     "reddit_fetch",
-    "Fetch a Reddit post and comments from its RSS feed. Returns bounded structured JSON.",
     {
-      url: z.string().url().describe("Reddit post URL (e.g., https://www.reddit.com/r/subreddit/comments/...)"),
-      comments_limit: z
-        .number()
-        .int()
-        .min(0)
-        .max(MAX_COMMENT_LIMIT)
-        .default(DEFAULT_COMMENT_LIMIT)
-        .describe(`Maximum comments to return (max ${MAX_COMMENT_LIMIT})`),
+      description: "Fetch a Reddit post and comments from its RSS feed. Returns bounded structured JSON.",
+      inputSchema: {
+        url: z.string().url().describe("Reddit post URL (e.g., https://www.reddit.com/r/subreddit/comments/...)"),
+        comments_limit: z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_COMMENT_LIMIT)
+          .default(DEFAULT_COMMENT_LIMIT)
+          .describe(`Maximum comments to return (max ${MAX_COMMENT_LIMIT})`),
+      },
     },
     async ({ url, comments_limit }) => {
       try {

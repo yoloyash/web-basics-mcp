@@ -6,12 +6,14 @@ const FETCH_TIMEOUT_MS = 10000;
 const MAX_QUERY_LENGTH = 500;
 
 export default function registerWebSearch(server: McpServer) {
-  server.tool(
+  server.registerTool(
     "web_search",
-    "Search the web. Returns {link, title, snippet}.",
     {
-      query: z.string().describe("Search query"),
-      limit: z.number().int().min(1).max(10).default(5).describe("Result limit"),
+      description: "Search the web. Returns {link, title, snippet}.",
+      inputSchema: {
+        query: z.string().describe("Search query"),
+        limit: z.number().int().min(1).max(10).default(5).describe("Result limit"),
+      },
     },
     async ({ query, limit }) => {
       try {
