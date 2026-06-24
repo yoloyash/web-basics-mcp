@@ -50,6 +50,16 @@ test("reddit_search validates subreddit names", async () => {
   assert.match(result.content[0].text, /^validation: Invalid subreddit/);
 });
 
+test("reddit_search rejects blank queries before calling SearXNG", async () => {
+  const result = await client.callTool({
+    name: "reddit_search",
+    arguments: { query: "   " },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Query cannot be empty/);
+});
+
 test("fetch_url blocks localhost URLs", async () => {
   const result = await client.callTool({
     name: "fetch_url",

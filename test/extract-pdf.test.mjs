@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { extractPdfMarkdown } from "../build/tools/extract-pdf.js";
+import { extractPdfMarkdown } from "../build/content/pdf.js";
 
 const readablePdf = new Uint8Array(await readFile(new URL("./fixtures/readable.pdf", import.meta.url)));
 const blankPdf = new Uint8Array(await readFile(new URL("./fixtures/blank.pdf", import.meta.url)));

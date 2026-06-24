@@ -1,5 +1,5 @@
-import { extractPdfMarkdown, type PdfMarkdown } from "./extract-pdf.js";
-import { extractReadableMarkdown, type ReadableMarkdown } from "./extract-readable.js";
+import { extractPdfMarkdown, type PdfMarkdown } from "./pdf.js";
+import { extractReadableMarkdown, type ReadableMarkdown } from "./html.js";
 
 export type ExtractedContent = (ReadableMarkdown | PdfMarkdown) & {
   contentType: string;

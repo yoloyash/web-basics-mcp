@@ -4,7 +4,7 @@ import { test } from "node:test";
 import {
   extractFetchedContent,
   fetchByteLimitForContentType,
-} from "../build/tools/extract-content.js";
+} from "../build/content/index.js";
 
 const readablePdfBytes = await readFile(new URL("./fixtures/readable.pdf", import.meta.url));
 const encoder = new TextEncoder();

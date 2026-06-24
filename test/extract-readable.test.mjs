@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extractReadableMarkdown } from "../build/tools/extract-readable.js";
+import { extractReadableMarkdown } from "../build/content/html.js";
 
 const readableText = [
   "This article explains how a small local web tool extracts the important text from a document.",
