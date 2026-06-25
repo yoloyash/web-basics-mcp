@@ -100,6 +100,7 @@ npm test
 - The server runs as a local MCP server over stdio.
 - Search uses the SearXNG instance configured by `SEARXNG_URL`.
 - `fetch_url` only supports public HTTP(S) pages and blocks private/local addresses.
+- Set `WEB_BASICS_USER_AGENT` to customize the fetch user agent.
 - Reddit support uses Reddit's RSS feed, so it may return fewer comments than the full website.
 - Returned content is capped to keep MCP responses manageable.
 - Search quality depends on the engines enabled in your SearXNG configuration.

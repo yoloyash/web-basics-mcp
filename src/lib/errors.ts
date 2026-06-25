@@ -1,6 +1,7 @@
 export interface ClassifiedError {
   category: "validation" | "network" | "http" | "timeout" | "parse";
   message: string;
+  retryable?: boolean;
 }
 
 const TIMEOUT_NAMES = new Set(["AbortError", "TimeoutError"]);
@@ -26,21 +27,30 @@ export function classifyError(err: unknown): ClassifiedError {
   const msg = err instanceof Error ? err.message : String(err);
   const name = err instanceof Error ? err.name : "";
   const code = typeof err === "object" && err !== null && "code" in err ? (err as { code: unknown }).code : undefined;
+  const retryable =
+    typeof err === "object" && err !== null && "retryable" in err && typeof err.retryable === "boolean"
+      ? err.retryable
+      : undefined;
 
   if (TIMEOUT_NAMES.has(name)) {
-    return { category: "timeout", message: `Request timed out: ${msg}` };
+    return { category: "timeout", message: `Request timed out: ${msg}`, retryable: retryable ?? true };
   }
 
   const httpStatusMatch = msg.match(/\b(?:HTTP\s*)?(?:status(?: code)?|error: status)\s+(\d{3})\b/i);
   if (httpStatusMatch) {
-    return { category: "http", message: msg };
+    const status = Number(httpStatusMatch[1]);
+    return { category: "http", message: msg, retryable: retryable ?? (status === 429 || status >= 500) };
   }
 
   if (typeof code === "string" && NETWORK_CODES.has(code)) {
-    return { category: "network", message: `Cannot connect: ${msg}` };
+    return { category: "network", message: `Cannot connect: ${msg}`, retryable: retryable ?? true };
   }
   if (NETWORK_MESSAGES.has(msg.toLowerCase())) {
-    return { category: "network", message: `Cannot connect: ${msg}` };
+    return { category: "network", message: `Cannot connect: ${msg}`, retryable: retryable ?? true };
+  }
+
+  if (msg === "Body too large") {
+    return { category: "validation", message: msg, retryable: false };
   }
 
   if (/parse|invalid xml|unexpected token|malformed/i.test(msg)) {

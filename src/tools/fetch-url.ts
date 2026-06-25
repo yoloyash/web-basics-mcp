@@ -53,8 +53,9 @@ export default function registerFetchUrl(server: McpServer) {
           ],
         };
       } catch (err) {
-        const { category, message } = classifyError(err);
-        return { content: [{ type: "text", text: `${category}: ${message}` }], isError: true };
+        const { category, message, retryable } = classifyError(err);
+        const retryHint = typeof retryable === "boolean" ? ` (retryable: ${retryable})` : "";
+        return { content: [{ type: "text", text: `${category}: ${message}${retryHint}` }], isError: true };
       }
     },
   );
