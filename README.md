@@ -8,6 +8,7 @@ It can search the web through SearXNG, fetch readable page content, and pull Red
 
 - **`web_search`** - Search the web with SearXNG.
 - **`fetch_url`** - Fetch a page or PDF and turn it into readable markdown.
+- **`research_query`** - Search and fetch top sources in one bounded response.
 - **`reddit_search`** - Find Reddit posts.
 - **`reddit_fetch`** - Fetch a Reddit post and its comments.
 

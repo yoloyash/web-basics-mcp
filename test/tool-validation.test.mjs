@@ -22,7 +22,7 @@ test("registers the expected tools", async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["fetch_url", "reddit_fetch", "reddit_search", "web_search"],
+    ["fetch_url", "reddit_fetch", "reddit_search", "research_query", "web_search"],
   );
 
   const fetchTool = tools.find((tool) => tool.name === "fetch_url");
@@ -33,6 +33,16 @@ test("registers the expected tools", async () => {
 test("web_search rejects blank queries before calling SearXNG", async () => {
   const result = await client.callTool({
     name: "web_search",
+    arguments: { query: "   " },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Query cannot be empty/);
+});
+
+test("research_query rejects blank queries before calling SearXNG", async () => {
+  const result = await client.callTool({
+    name: "research_query",
     arguments: { query: "   " },
   });
 
