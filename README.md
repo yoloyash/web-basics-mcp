@@ -2,12 +2,12 @@
 
 A tiny MCP server that gives agents basic web tools without API keys.
 
-It can search the web through SearXNG, fetch readable page content, and pull Reddit threads from RSS.
+It can search the web through SearXNG, fetch pages, PDFs, and images, and pull Reddit threads from RSS.
 
 ## Tools
 
 - **`web_search`** - Search the web with SearXNG.
-- **`fetch_url`** - Fetch a page or PDF and turn it into readable markdown.
+- **`fetch_url`** - Fetch a page, PDF, or image.
 - **`reddit_search`** - Find Reddit posts.
 - **`reddit_fetch`** - Fetch a Reddit post and its comments.
 
