@@ -1,6 +1,7 @@
 import Parser from "rss-parser";
 import { normalizeQuery, searchSearxng } from "./search.js";
 import { validationError } from "./errors.js";
+import { fetch } from "./fetch.js";
 
 const FETCH_TIMEOUT_MS = 15000;
 const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com"]);
@@ -106,16 +107,22 @@ export async function fetchRedditPost(url: string, commentsLimit: number): Promi
     return withCommentLimit(cached.result, commentsLimit);
   }
 
-  const parser = new Parser({
+  const parser = new Parser();
+
+  const res = await fetch(postUrl.rssUrl, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0",
       Accept: "application/atom+xml, application/xml, text/xml, */*",
     },
-    timeout: FETCH_TIMEOUT_MS,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
+  if (!res.ok) {
+    throw new Error(`HTTP status ${res.status} fetching ${postUrl.rssUrl}`);
+  }
 
-  const feed = await parser.parseURL(postUrl.rssUrl);
+  const xml = await res.text();
+  const feed = await parser.parseString(xml);
   if (!feed.items || feed.items.length === 0) {
     throw validationError("No items found in the RSS feed. Make sure the URL is a valid Reddit post.");
   }

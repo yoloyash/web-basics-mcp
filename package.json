@@ -33,7 +33,7 @@
     "reddit"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20.18.1"
   },
   "scripts": {
     "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('build', { recursive: true, force: true });\"",
@@ -51,6 +51,7 @@
     "linkedom": "^0.18.5",
     "rss-parser": "^3.13.0",
     "turndown": "^7.2.4",
+    "undici": "^7.28.0",
     "unpdf": "^1.6.2",
     "zod": "^3.23.8"
   },

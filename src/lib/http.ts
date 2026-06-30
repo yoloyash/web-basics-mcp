@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { validationError } from "./errors.js";
+import { fetch } from "./fetch.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_REDIRECTS = 5;

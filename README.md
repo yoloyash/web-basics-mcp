@@ -13,7 +13,7 @@ It can search the web through SearXNG, fetch readable page content, and pull Red
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20.18.1 or newer
 - npm
 - Docker, only if you want to run the optional local SearXNG backend
 
@@ -49,6 +49,18 @@ docker compose down
 ```
 
 You can also point `SEARXNG_URL` at any existing SearXNG instance that has JSON output enabled.
+
+## Optional Proxy/VPN Routing
+
+If you already run a proxy behind a VPN, you can route outbound requests through it with standard proxy environment variables:
+
+```bash
+HTTPS_PROXY=http://127.0.0.1:19080
+HTTP_PROXY=http://127.0.0.1:19080
+NO_PROXY=127.0.0.1,localhost
+```
+
+This works with Gluetun's HTTP proxy, for example. Prefer a localhost or LAN-only proxy endpoint; do not expose it to the public internet.
 
 ## Install In MCP Clients
 
@@ -99,6 +111,7 @@ npm test
 
 - The server runs as a local MCP server over stdio.
 - Search uses the SearXNG instance configured by `SEARXNG_URL`.
+- If `HTTP_PROXY` or `HTTPS_PROXY` is set, outbound requests use that proxy.
 - `fetch_url` only supports public HTTP(S) pages and blocks private/local addresses.
 - Reddit support uses Reddit's RSS feed, so it may return fewer comments than the full website.
 - Returned content is capped to keep MCP responses manageable.
