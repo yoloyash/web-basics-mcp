@@ -81,11 +81,16 @@ Add this to your `opencode.json`, usually at `~/.config/opencode/opencode.json`:
     "web-basics": {
       "type": "local",
       "command": ["node", "~/web-basics-mcp/build/index.js"],
+      "environment": {
+        "SEARXNG_URL": "http://127.0.0.1:8088"
+      },
       "enabled": true
     }
   }
 }
 ```
+
+Replace the `SEARXNG_URL` value with your own SearXNG instance if it is not on localhost:8088.
 </details>
 
 ## Development
