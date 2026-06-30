@@ -1,4 +1,5 @@
 import { validationError } from "./errors.js";
+import { fetch } from "./fetch.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_QUERY_LENGTH = 500;

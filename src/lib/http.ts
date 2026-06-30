@@ -2,6 +2,7 @@ import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { validationError } from "./errors.js";
+import { fetch } from "./fetch.js";
 
 export const DEFAULT_USER_AGENT = "mcp-web-basics/1.0";
 
