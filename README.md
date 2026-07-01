@@ -34,6 +34,8 @@ Optional: copy the example environment file if you want to change the search bac
 cp .env.example .env
 ```
 
+The server loads `.env` from the project directory, not the MCP client's working directory. Set `WEB_BASICS_ENV_FILE` to use a different env file.
+
 ## Search Backend
 
 If you want local web search, start the bundled search backend:

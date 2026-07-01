@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import "dotenv/config";
+import { loadEnv } from "./lib/env.js";
 import { initProxy } from "./lib/proxy.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
 
+loadEnv();
 initProxy();
 
 const server = createServer();
