@@ -2,8 +2,6 @@
 
 Basic web tools for agents. No API keys.
 
-Search the web, fetch URLs, and read Reddit posts from any MCP client.
-
 ## What It Provides
 
 | Tool | Use it for |
@@ -12,6 +10,8 @@ Search the web, fetch URLs, and read Reddit posts from any MCP client.
 | `fetch_url` | Fetch pages, PDFs, and images |
 | `reddit_search` | Find Reddit posts |
 | `reddit_fetch` | Read a Reddit post and its comments |
+
+> Optional proxy/VPN routing helps with Reddit rate limits.
 
 ## Requirements
 
