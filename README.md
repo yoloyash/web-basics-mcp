@@ -1,15 +1,17 @@
 # web-basics-mcp
 
-A tiny MCP server that gives agents basic web tools without API keys.
+Basic web tools for agents. No API keys.
 
-It can search the web through SearXNG, fetch pages, PDFs, and images, and pull Reddit threads from RSS.
+Search the web, fetch URLs, and read Reddit posts from any MCP client.
 
-## Tools
+## What It Provides
 
-- **`web_search`** - Search the web with SearXNG.
-- **`fetch_url`** - Fetch a page, PDF, or image.
-- **`reddit_search`** - Find Reddit posts.
-- **`reddit_fetch`** - Fetch a Reddit post and its comments.
+| Tool | Use it for |
+| --- | --- |
+| `web_search` | Search the web |
+| `fetch_url` | Fetch pages, PDFs, and images |
+| `reddit_search` | Find Reddit posts |
+| `reddit_fetch` | Read a Reddit post and its comments |
 
 ## Requirements
 
@@ -32,23 +34,21 @@ Optional: copy the example environment file if you want to change the search bac
 cp .env.example .env
 ```
 
-By default, the server uses `http://127.0.0.1:8088` for SearXNG. You can set `SEARXNG_URL` in your shell, your MCP client config, or a local `.env` file.
-
 ## Search Backend
 
-To start the bundled local SearXNG service:
+If you want local web search, start the bundled search backend:
 
 ```bash
 docker compose up -d
 ```
 
-That exposes SearXNG at `http://127.0.0.1:8088`. Stop it with:
+Stop it with:
 
 ```bash
 docker compose down
 ```
 
-You can also point `SEARXNG_URL` at any existing SearXNG instance that has JSON output enabled.
+By default, the server expects search at `http://127.0.0.1:8088`. Set `SEARXNG_URL` if you use a different search backend.
 
 ## Optional Proxy/VPN Routing
 
@@ -112,7 +112,7 @@ npm run build
 npm test
 ```
 
-## Behavior
+## Under The Hood
 
 - The server runs as a local MCP server over stdio.
 - Search uses the SearXNG instance configured by `SEARXNG_URL`.
