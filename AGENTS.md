@@ -52,9 +52,11 @@ Tests use Node's built-in test runner and live in `test/`. Prefer focused behavi
 
 - Preserve `fetch_url` protections for protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Do not add alternate network paths that bypass `src/lib/http.ts`.
 
+- Optional proxy/VPN routing is supported with standard proxy environment variables; it helps users route traffic through an existing VPN-backed proxy when rate limits are a problem.
+
 - Use `SEARXNG_URL` for search backend configuration. Keep returned content bounded and leave answer synthesis to the client/model rather than hiding it inside the server.
 
 ## Branches, Commits And PRs
 
-- `main` should stay stable and boring. Riskier changes, such as proxy or VPN routing, should mature on `dev` before being promoted here.
+- Keep changes easy to review and easy to promote back to `main` when they are stable.
 - Use conventional commit messages. Keep commits focused and describe the user-visible change. PRs should include a concise summary, verification steps, and any configuration changes.
