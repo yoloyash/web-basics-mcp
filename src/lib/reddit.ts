@@ -1,5 +1,4 @@
 import Parser from "rss-parser";
-import { normalizeQuery, searchSearxng } from "./search.js";
 import { validationError } from "./errors.js";
 import { fetch } from "./fetch.js";
 
@@ -40,17 +39,6 @@ interface RedditComment {
   content: string;
 }
 
-export interface RedditSearchResult {
-  title: string;
-  link: string;
-  subreddit: string;
-  post_id: string;
-  slug: string;
-  search_score: number | null;
-  source_engines: string[];
-  snippet: string;
-}
-
 export interface RedditFetchResult {
   url: string;
   subreddit: string;
@@ -58,44 +46,6 @@ export interface RedditFetchResult {
   comments: RedditComment[];
   comments_returned: number;
   comments_available: number;
-}
-
-export async function searchRedditPosts(
-  query: string,
-  subreddit: string | undefined,
-  limit: number,
-): Promise<RedditSearchResult[]> {
-  const normalizedQuery = normalizeQuery(query);
-  const normalizedSubreddit = normalizeSubreddit(subreddit);
-  const siteQuery = normalizedSubreddit
-    ? `site:reddit.com/r/${normalizedSubreddit}/comments ${normalizedQuery}`
-    : `site:reddit.com/r/ ${normalizedQuery}`;
-
-  const seen = new Set<string>();
-  const results = await searchSearxng(siteQuery);
-
-  return results
-    .flatMap((result) => {
-      const postUrl = parseRedditPostUrl(result.url);
-      if (!postUrl) return [];
-      if (normalizedSubreddit && postUrl.subreddit.toLowerCase() !== normalizedSubreddit.toLowerCase()) return [];
-      if (seen.has(postUrl.postId)) return [];
-      seen.add(postUrl.postId);
-
-      return [
-        {
-          title: cleanTitle(result.title) || postUrl.slug.replaceAll("_", " "),
-          link: postUrl.canonicalUrl,
-          subreddit: `r/${postUrl.subreddit}`,
-          post_id: postUrl.postId,
-          slug: postUrl.slug,
-          search_score: result.score ?? null,
-          source_engines: result.engines ?? [],
-          snippet: result.content ?? "",
-        },
-      ];
-    })
-    .slice(0, limit);
 }
 
 export async function fetchRedditPost(url: string, commentsLimit: number): Promise<RedditFetchResult> {
@@ -162,30 +112,6 @@ export async function fetchRedditPost(url: string, commentsLimit: number): Promi
   return withCommentLimit(result, commentsLimit);
 }
 
-function normalizeSubreddit(input?: string): string | undefined {
-  if (!input) return undefined;
-
-  const name = input.trim().replace(/^\/?r\//i, "");
-  if (!name) return undefined;
-  if (!/^[a-zA-Z0-9_]{2,21}$/.test(name)) {
-    throw validationError("Invalid subreddit. Use a subreddit name like typescript or r/typescript.");
-  }
-
-  return name;
-}
-
-function parseRedditPostUrl(rawUrl: string): RedditPostUrl | undefined {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    return undefined;
-  }
-
-  if (!REDDIT_HOSTS.has(url.hostname.toLowerCase())) return undefined;
-  return parseRedditPostPath(url.pathname);
-}
-
 function requireRedditPostUrl(rawUrl: string): RedditPostUrl {
   let url: URL;
   try {
@@ -237,10 +163,6 @@ function parseRedditPostPath(pathname: string): RedditPostUrl | undefined {
     postId,
     slug,
   };
-}
-
-function cleanTitle(title?: string): string {
-  return (title ?? "").replace(/\s+-\s+Reddit$/i, "").trim();
 }
 
 function cleanContent(text?: string): string {

@@ -13,7 +13,6 @@
 |   |   |-- index.ts
 |   |   |-- fetch-url.ts
 |   |   |-- web-search.ts
-|   |   |-- reddit-search.ts
 |   |   `-- reddit-fetch.ts
 |   |-- lib/          # shared fetch, search, reddit, and error helpers
 |   `-- content/      # HTML, PDF, and image content handling

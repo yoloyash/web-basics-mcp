@@ -7,7 +7,8 @@ export default function registerRedditFetch(server: McpServer) {
   server.registerTool(
     "reddit_fetch",
     {
-      description: "Fetch a Reddit post and comments from its RSS feed. Returns bounded structured JSON.",
+      description:
+        "Fetch structured JSON for a Reddit post and its comments. Use web_search to discover Reddit post URLs first.",
       inputSchema: {
         url: z.string().url().describe("Reddit post URL (e.g., https://www.reddit.com/r/subreddit/comments/...)"),
         comments_limit: z
