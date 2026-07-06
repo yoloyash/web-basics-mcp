@@ -7,6 +7,7 @@ import {
   fetchByteLimitForContentType,
   type ExtractedContent,
 } from "../content/index.js";
+import { contentStore, type ContentStore } from "../lib/content-store.js";
 import { classifyError, validationError } from "../lib/errors.js";
 import { fetchPublicHttpUrl, readBytesCapped } from "../lib/http.js";
 
@@ -16,13 +17,17 @@ const MAX_PDF_FETCH_BYTES = 15 * 1024 * 1024;
 const MAX_BATCH_URLS = 5;
 const BATCH_CONCURRENCY = 3;
 
-export function formatFetchedContent(finalUrl: string, result: ExtractedContent): CallToolResult {
+export function formatFetchedContent(
+  finalUrl: string,
+  result: ExtractedContent,
+  store: ContentStore = contentStore,
+): CallToolResult {
   if (result.extractor === "image") {
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(formatFetchedPayload(finalUrl, result), null, 2),
+          text: JSON.stringify(formatFetchedPayload(finalUrl, result, store), null, 2),
         },
         {
           type: "image",
@@ -37,13 +42,17 @@ export function formatFetchedContent(finalUrl: string, result: ExtractedContent)
     content: [
       {
         type: "text",
-        text: JSON.stringify(formatFetchedPayload(finalUrl, result), null, 2),
+        text: JSON.stringify(formatFetchedPayload(finalUrl, result, store), null, 2),
       },
     ],
   };
 }
 
-function formatFetchedPayload(finalUrl: string, result: ExtractedContent): Record<string, unknown> {
+export function formatFetchedPayload(
+  finalUrl: string,
+  result: ExtractedContent,
+  store: ContentStore = contentStore,
+): Record<string, unknown> {
   if (result.extractor === "image") {
     return {
       url: finalUrl,
@@ -54,15 +63,29 @@ function formatFetchedPayload(finalUrl: string, result: ExtractedContent): Recor
   }
 
   const content = result.content.slice(0, MAX_CONTENT_CHARS);
+  const truncated = result.content.length > MAX_CONTENT_CHARS;
   const payload: Record<string, unknown> = {
     url: finalUrl,
     title: result.title,
     content,
     wordCount: result.wordCount,
     contentType: result.contentType,
-    truncated: result.content.length > MAX_CONTENT_CHARS,
+    truncated,
     extractor: result.extractor,
   };
+
+  if (truncated) {
+    payload.content_id = store.put({
+      url: finalUrl,
+      title: result.title,
+      content: result.content,
+      contentType: result.contentType,
+      extractor: result.extractor,
+    });
+    payload.total_chars = result.content.length;
+    payload.returned_chars = content.length;
+    payload.next_offset = content.length;
+  }
 
   if ("pageCount" in result) {
     payload.pageCount = result.pageCount;

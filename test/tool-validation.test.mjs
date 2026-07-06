@@ -22,7 +22,7 @@ test("registers the expected tools", async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["fetch_url", "reddit_fetch", "web_search"],
+    ["fetch_url", "get_content", "reddit_fetch", "web_search"],
   );
 
   const fetchTool = tools.find((tool) => tool.name === "fetch_url");
@@ -117,6 +117,16 @@ test("fetch_url batch returns per-url validation errors", async () => {
     payload.results.map((item) => item.error.category),
     ["validation", "validation"],
   );
+});
+
+test("get_content rejects unknown content ids", async () => {
+  const result = await client.callTool({
+    name: "get_content",
+    arguments: { content_id: "missing" },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Unknown or expired content_id/);
 });
 
 test("reddit_fetch rejects non-Reddit URLs", async () => {
