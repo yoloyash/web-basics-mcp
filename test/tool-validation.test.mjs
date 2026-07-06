@@ -41,6 +41,29 @@ test("web_search rejects blank queries before calling SearXNG", async () => {
   assert.match(result.content[0].text, /^validation: Query cannot be empty/);
 });
 
+test("web_search rejects query and queries together", async () => {
+  const result = await client.callTool({
+    name: "web_search",
+    arguments: {
+      query: "typescript",
+      queries: ["node"],
+    },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Use either query or queries, not both/);
+});
+
+test("web_search rejects blank values in queries before calling SearXNG", async () => {
+  const result = await client.callTool({
+    name: "web_search",
+    arguments: { queries: ["typescript", "   "] },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Query cannot be empty/);
+});
+
 test("fetch_url blocks localhost URLs", async () => {
   const result = await client.callTool({
     name: "fetch_url",

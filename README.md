@@ -6,7 +6,7 @@ Basic web tools for agents. No API keys.
 
 | Tool | Use it for |
 | --- | --- |
-| `web_search` | Search the web |
+| `web_search` | Search one or more queries |
 | `fetch_url` | Fetch one or more pages, PDFs, and images |
 | `reddit_fetch` | Read a Reddit post and its comments |
 
