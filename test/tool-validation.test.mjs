@@ -41,6 +41,29 @@ test("web_search rejects blank queries before calling SearXNG", async () => {
   assert.match(result.content[0].text, /^validation: Query cannot be empty/);
 });
 
+test("web_search rejects query and queries together", async () => {
+  const result = await client.callTool({
+    name: "web_search",
+    arguments: {
+      query: "typescript",
+      queries: ["node"],
+    },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Use either query or queries, not both/);
+});
+
+test("web_search rejects blank values in queries before calling SearXNG", async () => {
+  const result = await client.callTool({
+    name: "web_search",
+    arguments: { queries: ["typescript", "   "] },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Query cannot be empty/);
+});
+
 test("fetch_url blocks localhost URLs", async () => {
   const result = await client.callTool({
     name: "fetch_url",
@@ -59,6 +82,41 @@ test("fetch_url rejects unsupported protocols", async () => {
 
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /^validation: Unsupported protocol/);
+});
+
+test("fetch_url rejects url and urls together", async () => {
+  const result = await client.callTool({
+    name: "fetch_url",
+    arguments: {
+      url: "https://example.com",
+      urls: ["https://example.org"],
+    },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: Use either url or urls, not both/);
+});
+
+test("fetch_url batch returns per-url validation errors", async () => {
+  const result = await client.callTool({
+    name: "fetch_url",
+    arguments: {
+      urls: ["http://localhost:8088", "ftp://example.com/file.txt"],
+    },
+  });
+
+  assert.equal(result.isError, true);
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload.fetchedCount, 0);
+  assert.equal(payload.failedCount, 2);
+  assert.deepEqual(
+    payload.results.map((item) => item.inputUrl),
+    ["http://localhost:8088", "ftp://example.com/file.txt"],
+  );
+  assert.deepEqual(
+    payload.results.map((item) => item.error.category),
+    ["validation", "validation"],
+  );
 });
 
 test("reddit_fetch rejects non-Reddit URLs", async () => {
