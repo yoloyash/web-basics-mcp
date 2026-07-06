@@ -1,16 +1,85 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { classifyError, validationError } from "../lib/errors.js";
-import { normalizeQuery, searchSearxng } from "../lib/search.js";
+import { normalizeQuery, searchSearxng, type NormalizedQuery, type SearxResult } from "../lib/search.js";
 
 const MAX_BATCH_QUERIES = 4;
 
-function formatSearchResults(results: Awaited<ReturnType<typeof searchSearxng>>, limit: number) {
+type SearchBackend = (query: NormalizedQuery) => Promise<SearxResult[]>;
+
+interface SearchResult {
+  link: string;
+  title: string;
+  snippet: string;
+}
+
+interface SearchError {
+  category: ReturnType<typeof classifyError>["category"];
+  message: string;
+  retryable?: boolean;
+}
+
+type BatchSearchResult =
+  | { query: string; ok: true; results: SearchResult[] }
+  | { query: string; ok: false; error: SearchError };
+
+export interface BatchSearchResponse {
+  failedCount: number;
+  results: BatchSearchResult[];
+  searchedCount: number;
+}
+
+function formatSearchResults(results: SearxResult[], limit: number): SearchResult[] {
   return results.slice(0, limit).map((r) => ({
     link: r.url,
     title: r.title ?? r.url,
     snippet: r.content ?? "",
   }));
+}
+
+export async function searchSingleQuery(
+  query: string,
+  limit: number,
+  search: SearchBackend = searchSearxng,
+): Promise<SearchResult[]> {
+  const normalizedQuery = normalizeQuery(query);
+  return formatSearchResults(await search(normalizedQuery), limit);
+}
+
+export async function searchBatchQueries(
+  queries: string[],
+  limit: number,
+  search: SearchBackend = searchSearxng,
+): Promise<BatchSearchResponse> {
+  const normalizedQueries = queries.map(normalizeQuery);
+  const results = await Promise.all(
+    normalizedQueries.map(async (searchQuery): Promise<BatchSearchResult> => {
+      try {
+        return {
+          query: searchQuery,
+          ok: true,
+          results: formatSearchResults(await search(searchQuery), limit),
+        };
+      } catch (err) {
+        const { category, message, retryable } = classifyError(err);
+        return {
+          query: searchQuery,
+          ok: false,
+          error: {
+            category,
+            message,
+            ...(typeof retryable === "boolean" ? { retryable } : {}),
+          },
+        };
+      }
+    }),
+  );
+  const failedCount = results.filter((result) => !result.ok).length;
+  return {
+    results,
+    searchedCount: results.length - failedCount,
+    failedCount,
+  };
 }
 
 export default function registerWebSearch(server: McpServer) {
@@ -30,19 +99,16 @@ export default function registerWebSearch(server: McpServer) {
         if (!query && !queries) throw validationError("Provide query or queries");
 
         if (query) {
-          const results = formatSearchResults(await searchSearxng(query), limit);
+          const results = await searchSingleQuery(query, limit);
           return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
         }
 
-        const normalizedQueries = (queries ?? []).map(normalizeQuery);
-        const results = await Promise.all(
-          normalizedQueries.map(async (searchQuery) => ({
-            query: searchQuery,
-            results: formatSearchResults(await searchSearxng(searchQuery), limit),
-          })),
-        );
+        const payload = await searchBatchQueries(queries ?? [], limit);
 
-        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          isError: payload.failedCount === payload.results.length,
+        };
       } catch (err) {
         const { category, message } = classifyError(err);
         return { content: [{ type: "text", text: `${category}: ${message}` }], isError: true };

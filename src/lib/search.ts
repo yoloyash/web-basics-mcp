@@ -3,6 +3,9 @@ import { fetch } from "./fetch.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_QUERY_LENGTH = 500;
+declare const normalizedQueryBrand: unique symbol;
+
+export type NormalizedQuery = string & { readonly [normalizedQueryBrand]: true };
 
 export interface SearxResult {
   url: string;
@@ -12,9 +15,9 @@ export interface SearxResult {
   engines?: string[];
 }
 
-export async function searchSearxng(query: string): Promise<SearxResult[]> {
+export async function searchSearxng(normalizedQuery: NormalizedQuery): Promise<SearxResult[]> {
   const url = createSearchUrl();
-  url.searchParams.set("q", normalizeQuery(query));
+  url.searchParams.set("q", normalizedQuery);
   url.searchParams.set("format", "json");
   url.searchParams.set("safesearch", "1");
   url.searchParams.set("language", "all");
@@ -26,11 +29,11 @@ export async function searchSearxng(query: string): Promise<SearxResult[]> {
   return json.results ?? [];
 }
 
-export function normalizeQuery(input: string): string {
+export function normalizeQuery(input: string): NormalizedQuery {
   const query = input.trim();
   if (!query) throw validationError("Query cannot be empty");
   if (query.length > MAX_QUERY_LENGTH) throw validationError(`Query cannot exceed ${MAX_QUERY_LENGTH} characters`);
-  return query;
+  return query as NormalizedQuery;
 }
 
 function createSearchUrl(): URL {
