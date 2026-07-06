@@ -1,13 +1,16 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
+import { extractRscMarkdown, type RscMarkdown } from "./rsc.js";
 
-export interface ReadableMarkdown {
+export interface ReadabilityMarkdown {
   title: string;
   content: string;
   wordCount: number;
   extractor: "readability";
 }
+
+export type ReadableMarkdown = ReadabilityMarkdown | RscMarkdown;
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -22,6 +25,16 @@ turndown.remove((node) =>
 );
 
 export function extractReadableMarkdown(html: string, finalUrl: string): ReadableMarkdown {
+  try {
+    return extractReadabilityMarkdown(html, finalUrl);
+  } catch (err) {
+    const rscResult = extractRscMarkdown(html, finalUrl);
+    if (rscResult) return rscResult;
+    throw err;
+  }
+}
+
+function extractReadabilityMarkdown(html: string, finalUrl: string): ReadabilityMarkdown {
   const { document } = parseHTML(html);
   ensureBaseUrl(document, finalUrl);
 

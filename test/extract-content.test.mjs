@@ -23,6 +23,22 @@ const readableHtml = encoder.encode(`<!doctype html>
     </body>
   </html>`);
 
+const rscText = [
+  "This RSC-only fixture has enough useful text to prove that the content router can recover text from Next.js flight data.",
+  "The visible HTML body does not contain a readable article, so Readability should fail before the RSC fallback succeeds.",
+  "That keeps the fallback narrow while still helping modern documentation pages.",
+].join(" ");
+
+const rscHtml = encoder.encode(rscPage([
+  [
+    "23",
+    element("main", [
+      element("h1", "RSC Routed Fixture"),
+      element("p", rscText),
+    ]),
+  ],
+]));
+
 test("routes application/pdf content to the PDF extractor", async () => {
   const result = await extractFetchedContent(
     readablePdf(),
@@ -62,6 +78,19 @@ test("routes HTML content to the readability extractor", async () => {
   assert.match(result.content, /ordinary web pages still use the HTML path/);
 });
 
+test("routes RSC-only HTML content to the RSC extractor", async () => {
+  const result = await extractFetchedContent(
+    rscHtml,
+    "https://example.com/rsc",
+    "text/html; charset=utf-8",
+  );
+
+  assert.equal(result.extractor, "rsc");
+  assert.equal(result.contentType, "text/html");
+  assert.match(result.content, /# RSC Routed Fixture/);
+  assert.match(result.content, /Next\.js flight data/);
+});
+
 test("routes supported raster image content to the image extractor", async () => {
   const result = await extractFetchedContent(
     pngBytes,
@@ -94,3 +123,16 @@ test("uses larger fetch byte limit for PDFs, unknown content types, and unsuppor
   assert.equal(fetchByteLimitForContentType("image/bmp", 5, 15), 15);
   assert.equal(fetchByteLimitForContentType(undefined, 5, 15), 15);
 });
+
+function rscPage(chunks) {
+  const payload = chunks.map(([id, node]) => `${id}:${JSON.stringify(node)}`).join("\n");
+  return `<!doctype html>
+    <html>
+      <head><title>RSC Routed Fixture</title></head>
+      <body><script>self.__next_f.push([1,${JSON.stringify(payload)}])</script></body>
+    </html>`;
+}
+
+function element(tag, children, props = {}) {
+  return ["$", tag, null, { ...props, children }];
+}
