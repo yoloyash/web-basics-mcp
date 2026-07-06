@@ -7,7 +7,7 @@ Basic web tools for agents. No API keys.
 | Tool | Use it for |
 | --- | --- |
 | `web_search` | Search the web |
-| `fetch_url` | Fetch pages, PDFs, and images |
+| `fetch_url` | Fetch one or more pages, PDFs, and images |
 | `reddit_fetch` | Read a Reddit post and its comments |
 
 > Optional proxy/VPN routing helps with Reddit rate limits.
