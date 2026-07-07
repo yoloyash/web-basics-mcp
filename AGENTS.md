@@ -12,9 +12,10 @@
 |   |-- tools/        # thin register* tool adapters
 |   |   |-- index.ts
 |   |   |-- fetch-url.ts
+|   |   |-- get-content.ts
 |   |   |-- web-search.ts
 |   |   `-- reddit-fetch.ts
-|   |-- lib/          # shared fetch, search, reddit, and error helpers
+|   |-- lib/          # shared HTTP, fetch, search, reddit, store, env, and error helpers
 |   `-- content/      # HTML, PDF, and image content handling
 |-- test/             # Node test runner tests and fixtures
 |-- build/            # compiled output
@@ -31,6 +32,7 @@ Keep this structure shallow. Tool files should register MCP tools and delegate r
 - `npm run start`: run the compiled MCP server.
 - `npm run dev`: watch TypeScript during development.
 - `npm test`: build and run the test suite.
+- `npm pack --dry-run`: check package contents and runtime build output.
 - `docker compose up -d`: start optional local SearXNG at `127.0.0.1:8088`.
 
 Run `npm test` before handing off code changes. Use `npm pack --dry-run` for package or publish-facing changes.
@@ -51,6 +53,12 @@ Tests use Node's built-in test runner and live in `test/`. Prefer focused behavi
 
 - Preserve `fetch_url` protections for protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Do not add alternate network paths that bypass `src/lib/http.ts`.
 
+- Preserve the existing single-input contracts when adding batch behavior. `web_search` accepts `query` or `queries`; `fetch_url` accepts `url` or `urls`.
+
+- Keep returned content bounded. Long `fetch_url` results should continue through `get_content` and the bounded content store, not larger inline MCP payloads.
+
+- Runtime configuration loads from the package-root `.env` file, or from `WEB_BASICS_ENV_FILE` when set. Do not make config depend on the MCP client's working directory.
+
 - Optional proxy/VPN routing is supported with standard proxy environment variables; it helps users route traffic through an existing VPN-backed proxy when rate limits are a problem.
 
 - Use `SEARXNG_URL` for search backend configuration. Keep returned content bounded and leave answer synthesis to the client/model rather than hiding it inside the server.
@@ -58,4 +66,5 @@ Tests use Node's built-in test runner and live in `test/`. Prefer focused behavi
 ## Branches, Commits And PRs
 
 - Keep changes easy to review and easy to promote back to `main` when they are stable.
+- For parallel feature work, branch from `dev` so PRs stay independent.
 - Use conventional commit messages. Keep commits focused and describe the user-visible change. PRs should include a concise summary, verification steps, and any configuration changes.

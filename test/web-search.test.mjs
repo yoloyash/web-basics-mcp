@@ -16,15 +16,25 @@ test("searchSingleQuery normalizes before searching", async () => {
   assert.deepEqual(results, [{ link: "https://example.com/a", title: "A", snippet: "Alpha" }]);
 });
 
-test("searchBatchQueries keeps successes when one query fails", async () => {
+test("searchBatchQueries keeps successes when one query fails and runs sequentially", async () => {
   const seenQueries = [];
+  let activeSearches = 0;
+  let maxActiveSearches = 0;
   const payload = await searchBatchQueries([" typescript ", "broken"], 5, async (query) => {
     seenQueries.push(query);
-    if (query === "broken") throw new Error("HTTP status 429 from SearXNG");
-    return [{ url: "https://example.com/typescript", title: "TypeScript", content: "Docs" }];
+    activeSearches += 1;
+    maxActiveSearches = Math.max(maxActiveSearches, activeSearches);
+    try {
+      if (query === "broken") throw new Error("HTTP status 429 from SearXNG");
+      await Promise.resolve();
+      return [{ url: "https://example.com/typescript", title: "TypeScript", content: "Docs" }];
+    } finally {
+      activeSearches -= 1;
+    }
   });
 
   assert.deepEqual(seenQueries, ["typescript", "broken"]);
+  assert.equal(maxActiveSearches, 1);
   assert.equal(payload.searchedCount, 1);
   assert.equal(payload.failedCount, 1);
   assert.deepEqual(payload.results[0], {

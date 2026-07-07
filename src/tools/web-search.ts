@@ -52,28 +52,29 @@ export async function searchBatchQueries(
   search: SearchBackend = searchSearxng,
 ): Promise<BatchSearchResponse> {
   const normalizedQueries = queries.map(normalizeQuery);
-  const results = await Promise.all(
-    normalizedQueries.map(async (searchQuery): Promise<BatchSearchResult> => {
-      try {
-        return {
-          query: searchQuery,
-          ok: true,
-          results: formatSearchResults(await search(searchQuery), limit),
-        };
-      } catch (err) {
-        const { category, message, retryable } = classifyError(err);
-        return {
-          query: searchQuery,
-          ok: false,
-          error: {
-            category,
-            message,
-            ...(typeof retryable === "boolean" ? { retryable } : {}),
-          },
-        };
-      }
-    }),
-  );
+  const results: BatchSearchResult[] = [];
+
+  for (const searchQuery of normalizedQueries) {
+    try {
+      results.push({
+        query: searchQuery,
+        ok: true,
+        results: formatSearchResults(await search(searchQuery), limit),
+      });
+    } catch (err) {
+      const { category, message, retryable } = classifyError(err);
+      results.push({
+        query: searchQuery,
+        ok: false,
+        error: {
+          category,
+          message,
+          ...(typeof retryable === "boolean" ? { retryable } : {}),
+        },
+      });
+    }
+  }
+
   const failedCount = results.filter((result) => !result.ok).length;
   return {
     results,
@@ -86,7 +87,8 @@ export default function registerWebSearch(server: McpServer) {
   server.registerTool(
     "web_search",
     {
-      description: "Search the web with one query or a small batch of queries. Returns {link, title, snippet}.",
+      description:
+        "Search the web with one query or a small batch of queries. Returns {link, title, snippet}.",
       inputSchema: {
         query: z.string().optional().describe("Search query"),
         queries: z.array(z.string()).min(1).max(MAX_BATCH_QUERIES).optional().describe("Search queries"),

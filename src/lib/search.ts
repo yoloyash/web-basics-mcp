@@ -11,8 +11,6 @@ export interface SearxResult {
   url: string;
   title?: string;
   content?: string;
-  score?: number;
-  engines?: string[];
 }
 
 export async function searchSearxng(normalizedQuery: NormalizedQuery): Promise<SearxResult[]> {

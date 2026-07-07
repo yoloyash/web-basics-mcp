@@ -2,7 +2,7 @@
 # The MCP server will target http://127.0.0.1:8088 by default.
 services:
   searxng:
-    image: docker.io/searxng/searxng:2026.5.5-0ac5254b8
+    image: docker.io/searxng/searxng:2026.7.6-556d08c39
     container_name: web-basics-searxng
     restart: unless-stopped
     ports:

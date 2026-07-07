@@ -31,7 +31,19 @@ engines:
   - name: wikidata
     disabled: true
   - name: brave
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: google
     disabled: true
+  - name: mojeek
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: startpage
+    disabled: false
   - name: karmasearch
     disabled: true
   - name: karmasearch videos
