@@ -8,6 +8,7 @@ Basic web tools for agents. No API keys.
 | --- | --- |
 | `web_search` | Search one or more queries |
 | `fetch_url` | Fetch one or more pages, PDFs, and images |
+| `get_content` | Continue long `fetch_url` results |
 | `reddit_fetch` | Read a Reddit post and its comments |
 
 > Optional proxy/VPN routing helps with Reddit rate limits.
@@ -122,4 +123,5 @@ npm test
 - Set `WEB_BASICS_USER_AGENT` to customize the fetch user agent.
 - Reddit support uses Reddit's RSS feed, so it may return fewer comments than the full website.
 - Returned content is capped to keep MCP responses manageable.
+- Long `fetch_url` results include a `content_id` that can be continued with `get_content`.
 - Search quality depends on the engines enabled in your SearXNG configuration.
