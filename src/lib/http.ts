@@ -23,19 +23,25 @@ type LookupHost = (hostname: string) => Promise<LookupAddress[]>;
 
 export interface FetchPublicHttpOptions {
   fetchImpl?: FetchLike;
+  headers?: Record<string, string>;
   lookupHost?: LookupHost;
+  maxTransientRetries?: number;
   retryDelayMs?: number;
   timeoutMs?: number;
   userAgent?: string;
+  validatePublicAddress?: boolean;
   wait?: (ms: number) => Promise<void>;
 }
 
 interface FetchConfig {
   fetchImpl: FetchLike;
+  headers: Record<string, string>;
   lookupHost: LookupHost;
+  maxTransientRetries: number;
   retryDelayMs: number;
   timeoutMs: number;
   userAgent: string;
+  validatePublicAddress: boolean;
   wait: (ms: number) => Promise<void>;
 }
 
@@ -71,18 +77,18 @@ async function fetchPublicHttpUrlWithRedirects(
   config: FetchConfig,
   redirects: number,
 ): Promise<{ res: Response; finalUrl: string }> {
-  const url = await validatePublicHttpUrl(rawUrl, config.lookupHost);
+  const url = await validatePublicHttpUrl(rawUrl, config.lookupHost, config.validatePublicAddress);
 
-  for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt += 1) {
+  for (let attempt = 0; attempt <= config.maxTransientRetries; attempt += 1) {
     let res: Response;
     try {
       res = await config.fetchImpl(url.toString(), {
-        headers: { "User-Agent": config.userAgent },
+        headers: requestHeaders(config),
         redirect: "manual",
         signal: AbortSignal.timeout(config.timeoutMs),
       });
     } catch (err) {
-      if (!shouldRetryFetchError(err, attempt)) throw err;
+      if (!shouldRetryFetchError(err, attempt, config.maxTransientRetries)) throw err;
       await config.wait(config.retryDelayMs);
       continue;
     }
@@ -95,7 +101,7 @@ async function fetchPublicHttpUrlWithRedirects(
     }
 
     if (!res.ok) {
-      if (isRetryableHttpStatus(res.status) && attempt < MAX_TRANSIENT_RETRIES) {
+      if (isRetryableHttpStatus(res.status) && attempt < config.maxTransientRetries) {
         await config.wait(config.retryDelayMs);
         continue;
       }
@@ -140,12 +146,20 @@ export async function readBytesCapped(res: Response, maxBytes: number): Promise<
 function normalizeFetchOptions(options: FetchPublicHttpOptions): FetchConfig {
   return {
     fetchImpl: options.fetchImpl ?? fetch,
+    headers: options.headers ?? {},
     lookupHost: options.lookupHost ?? lookupHost,
+    maxTransientRetries: options.maxTransientRetries ?? MAX_TRANSIENT_RETRIES,
     retryDelayMs: options.retryDelayMs ?? RETRY_DELAY_MS,
     timeoutMs: options.timeoutMs ?? FETCH_TIMEOUT_MS,
     userAgent: options.userAgent?.trim() || resolveUserAgent(),
+    validatePublicAddress: options.validatePublicAddress ?? true,
     wait: options.wait ?? wait,
   };
+}
+
+function requestHeaders(config: FetchConfig): Record<string, string> {
+  const { "User-Agent": _upperUserAgent, "user-agent": _lowerUserAgent, ...headers } = config.headers;
+  return { "User-Agent": config.userAgent, ...headers };
 }
 
 async function lookupHost(hostname: string): Promise<LookupAddress[]> {
@@ -156,8 +170,8 @@ async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function shouldRetryFetchError(err: unknown, attempt: number): boolean {
-  return attempt < MAX_TRANSIENT_RETRIES && isTransientFetchError(err);
+function shouldRetryFetchError(err: unknown, attempt: number, maxTransientRetries: number): boolean {
+  return attempt < maxTransientRetries && isTransientFetchError(err);
 }
 
 function isTransientFetchError(err: unknown): boolean {
@@ -172,7 +186,11 @@ function isTransientFetchError(err: unknown): boolean {
   );
 }
 
-async function validatePublicHttpUrl(rawUrl: string, lookupAddresses: LookupHost): Promise<URL> {
+async function validatePublicHttpUrl(
+  rawUrl: string,
+  lookupAddresses: LookupHost,
+  validatePublicAddress: boolean,
+): Promise<URL> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -191,6 +209,8 @@ async function validatePublicHttpUrl(rawUrl: string, lookupAddresses: LookupHost
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local")) {
     throw validationError("Private hostnames not allowed");
   }
+
+  if (!validatePublicAddress) return url;
 
   const records = await lookupAddresses(hostname).catch(() => []);
   if (records.length === 0) {

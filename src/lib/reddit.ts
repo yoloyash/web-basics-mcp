@@ -1,16 +1,21 @@
 import Parser from "rss-parser";
 import { validationError } from "./errors.js";
-import { fetch } from "./fetch.js";
+import { fetchPublicHttpUrl, readBytesCapped, type FetchPublicHttpOptions } from "./http.js";
 
 const FETCH_TIMEOUT_MS = 15000;
+const MAX_REDDIT_RSS_BYTES = 5 * 1024 * 1024;
+const REDDIT_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0";
 const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com"]);
 const CACHE_TTL_MS = 60_000;
 const MAX_POST_CHARS = 8000;
 const MAX_COMMENT_CHARS = 2000;
 const MAX_CACHE_ENTRIES = 100;
 
-export const DEFAULT_COMMENT_LIMIT = 100;
-export const MAX_COMMENT_LIMIT = 500;
+type RedditFetchOptions = Pick<
+  FetchPublicHttpOptions,
+  "fetchImpl" | "lookupHost" | "retryDelayMs" | "wait"
+>;
 
 const postCache = new Map<string, { expiresAt: number; result: RedditFetchResult }>();
 
@@ -22,7 +27,7 @@ interface RedditPostUrl {
   slug: string;
 }
 
-interface RedditPost {
+export interface RedditPost {
   id: string;
   title: string;
   author: string;
@@ -31,7 +36,7 @@ interface RedditPost {
   content: string;
 }
 
-interface RedditComment {
+export interface RedditComment {
   id: string;
   author: string;
   published: string;
@@ -44,34 +49,29 @@ export interface RedditFetchResult {
   subreddit: string;
   post: RedditPost;
   comments: RedditComment[];
-  comments_returned: number;
-  comments_available: number;
 }
 
-export async function fetchRedditPost(url: string, commentsLimit: number): Promise<RedditFetchResult> {
+export async function fetchRedditPost(url: string, options: RedditFetchOptions = {}): Promise<RedditFetchResult> {
   const postUrl = requireRedditPostUrl(url);
   pruneExpiredCache();
 
   const cached = postCache.get(postUrl.canonicalUrl);
   if (cached && cached.expiresAt > Date.now()) {
-    return withCommentLimit(cached.result, commentsLimit);
+    return cached.result;
   }
 
   const parser = new Parser();
 
-  const res = await fetch(postUrl.rssUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0",
-      Accept: "application/atom+xml, application/xml, text/xml, */*",
-    },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  const { res } = await fetchPublicHttpUrl(postUrl.rssUrl, {
+    ...options,
+    headers: { Accept: "application/atom+xml, application/xml, text/xml, */*" },
+    maxTransientRetries: 0,
+    timeoutMs: FETCH_TIMEOUT_MS,
+    userAgent: REDDIT_USER_AGENT,
+    validatePublicAddress: false,
   });
-  if (!res.ok) {
-    throw new Error(`HTTP status ${res.status} fetching ${postUrl.rssUrl}`);
-  }
 
-  const xml = await res.text();
+  const xml = new TextDecoder("utf-8", { fatal: false }).decode(await readBytesCapped(res, MAX_REDDIT_RSS_BYTES));
   const feed = await parser.parseString(xml);
   if (!feed.items || feed.items.length === 0) {
     throw validationError("No items found in the RSS feed. Make sure the URL is a valid Reddit post.");
@@ -103,13 +103,20 @@ export async function fetchRedditPost(url: string, commentsLimit: number): Promi
     subreddit: subreddit || postUrl.subreddit,
     post,
     comments,
-    comments_returned: comments.length,
-    comments_available: comments.length,
   };
 
   postCache.set(postUrl.canonicalUrl, { expiresAt: Date.now() + CACHE_TTL_MS, result });
   trimCache();
-  return withCommentLimit(result, commentsLimit);
+  return result;
+}
+
+export function isRedditUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return REDDIT_HOSTS.has(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 function requireRedditPostUrl(rawUrl: string): RedditPostUrl {
@@ -175,16 +182,6 @@ function cleanContent(text?: string): string {
 
 function stripRssSuffix(value: string): string {
   return value.replace(/\.rss$/i, "");
-}
-
-function withCommentLimit(result: RedditFetchResult, commentsLimit: number): RedditFetchResult {
-  const comments = result.comments.slice(0, commentsLimit);
-  return {
-    ...result,
-    comments,
-    comments_returned: comments.length,
-    comments_available: result.comments_available,
-  };
 }
 
 function pruneExpiredCache(): void {

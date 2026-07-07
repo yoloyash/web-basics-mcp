@@ -13,10 +13,9 @@
 |   |   |-- index.ts
 |   |   |-- fetch-url.ts
 |   |   |-- get-content.ts
-|   |   |-- web-search.ts
-|   |   `-- reddit-fetch.ts
+|   |   `-- web-search.ts
 |   |-- lib/          # shared HTTP, fetch, search, reddit, store, env, and error helpers
-|   `-- content/      # HTML, PDF, and image content handling
+|   `-- content/      # HTML, PDF, image, Reddit, and fetch routing
 |-- test/             # Node test runner tests and fixtures
 |-- build/            # compiled output
 |-- compose.yml       # optional local SearXNG service
@@ -51,7 +50,7 @@ Tests use Node's built-in test runner and live in `test/`. Prefer focused behavi
 
 ## Security And Behavior
 
-- Preserve `fetch_url` protections for protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Do not add alternate network paths that bypass `src/lib/http.ts`.
+- Preserve `fetch_url` protections for normal page, PDF, and image fetches: protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Reddit post URLs are validated against the Reddit host allowlist and still use `src/lib/http.ts`, but skip local DNS preflight so proxy routing stays faithful.
 
 - Preserve the existing single-input contracts when adding batch behavior. `web_search` accepts `query` or `queries`; `fetch_url` accepts `url` or `urls`.
 

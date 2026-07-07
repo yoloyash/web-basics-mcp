@@ -104,3 +104,30 @@ test("adds stored content metadata to batch fetch payloads", () => {
   assert.equal(payload.next_offset, 8000);
   assert.equal(store.slice("content-1", 8000, 1000).content, "b".repeat(1000));
 });
+
+test("formats Reddit content with the generic readable payload contract", () => {
+  const store = new ContentStore({ createId: () => "content-1" });
+  const result = formatFetchedPayload(
+    "https://www.reddit.com/r/LocalLLaMA/comments/abc123/example/",
+    {
+      title: "Example Reddit Post",
+      content: "c".repeat(9000),
+      wordCount: 1,
+      contentType: "application/atom+xml",
+      extractor: "reddit",
+    },
+    store,
+  );
+
+  assert.equal(result.title, "Example Reddit Post");
+  assert.equal(result.contentType, "application/atom+xml");
+  assert.equal(result.extractor, "reddit");
+  assert.equal(result.content.length, 8000);
+  assert.equal(result.content_id, "content-1");
+  assert.equal(result.total_chars, 9000);
+  assert.equal(result.returned_chars, 8000);
+  assert.equal(result.next_offset, 8000);
+  assert.equal(result.comments_available, undefined);
+  assert.equal(result.comments_returned, undefined);
+  assert.equal(result.comments, undefined);
+});

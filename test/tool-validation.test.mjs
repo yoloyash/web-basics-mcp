@@ -22,13 +22,14 @@ test("registers the expected tools", async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["fetch_url", "get_content", "reddit_fetch", "web_search"],
+    ["fetch_url", "get_content", "web_search"],
   );
 
   const fetchTool = tools.find((tool) => tool.name === "fetch_url");
   assert.ok(fetchTool);
   assert.match(fetchTool.description, /PDF/);
   assert.match(fetchTool.description, /images/);
+  assert.match(fetchTool.description, /Reddit/);
 });
 
 test("web_search rejects blank queries before calling SearXNG", async () => {
@@ -129,12 +130,12 @@ test("get_content rejects unknown content ids", async () => {
   assert.match(result.content[0].text, /^validation: Unknown or expired content_id/);
 });
 
-test("reddit_fetch rejects non-Reddit URLs", async () => {
+test("fetch_url rejects non-post Reddit URLs", async () => {
   const result = await client.callTool({
-    name: "reddit_fetch",
-    arguments: { url: "https://example.com/r/typescript/comments/abc/title/" },
+    name: "fetch_url",
+    arguments: { url: "https://www.reddit.com/r/typescript/" },
   });
 
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Only Reddit post URLs are supported/);
+  assert.match(result.content[0].text, /^validation: URL must be a Reddit post URL/);
 });

@@ -2,18 +2,12 @@ import { Buffer } from "node:buffer";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import {
-  extractFetchedContent,
-  fetchByteLimitForContentType,
-  type ExtractedContent,
-} from "../content/index.js";
+import { fetchUrlContent, recommendedFetchConcurrency } from "../content/fetch.js";
+import type { ExtractedContent } from "../content/index.js";
 import { contentStore, type ContentStore } from "../lib/content-store.js";
 import { classifyError, validationError } from "../lib/errors.js";
-import { fetchPublicHttpUrl, readBytesCapped } from "../lib/http.js";
 
 const MAX_CONTENT_CHARS = 8000;
-const MAX_FETCH_BYTES = 5 * 1024 * 1024;
-const MAX_PDF_FETCH_BYTES = 15 * 1024 * 1024;
 const MAX_BATCH_URLS = 5;
 const BATCH_CONCURRENCY = 3;
 
@@ -96,19 +90,6 @@ export function formatFetchedPayload(
   return payload;
 }
 
-async function fetchAndExtractUrl(url: string): Promise<{ finalUrl: string; result: ExtractedContent }> {
-  const { res, finalUrl } = await fetchPublicHttpUrl(url);
-  if (!res.ok) throw new Error(`HTTP status ${res.status}`);
-
-  const responseContentType = res.headers.get("content-type");
-  const body = await readBytesCapped(
-    res,
-    fetchByteLimitForContentType(responseContentType, MAX_FETCH_BYTES, MAX_PDF_FETCH_BYTES),
-  );
-
-  return { finalUrl, result: await extractFetchedContent(body, finalUrl, responseContentType) };
-}
-
 async function mapWithConcurrency<T, U>(
   items: T[],
   concurrency: number,
@@ -133,7 +114,8 @@ export default function registerFetchUrl(server: McpServer) {
   server.registerTool(
     "fetch_url",
     {
-      description: "Fetch one URL or a small batch of URLs and extract clean markdown from web pages or PDFs, or return supported images.",
+      description:
+        "Fetch one URL or a small batch of URLs and extract clean markdown from web pages, PDFs, or Reddit posts, or return supported images.",
       inputSchema: {
         url: z.string().url().optional().describe("Target URL"),
         urls: z.array(z.string().url()).min(1).max(MAX_BATCH_URLS).optional().describe("Target URLs"),
@@ -145,13 +127,14 @@ export default function registerFetchUrl(server: McpServer) {
         if (!url && !urls) throw validationError("Provide url or urls");
 
         if (url) {
-          const { finalUrl, result } = await fetchAndExtractUrl(url);
+          const { finalUrl, result } = await fetchUrlContent(url);
           return formatFetchedContent(finalUrl, result);
         }
 
-        const results = await mapWithConcurrency(urls ?? [], BATCH_CONCURRENCY, async (inputUrl) => {
+        const inputUrls = urls ?? [];
+        const results = await mapWithConcurrency(inputUrls, recommendedFetchConcurrency(inputUrls, BATCH_CONCURRENCY), async (inputUrl) => {
           try {
-            const { finalUrl, result } = await fetchAndExtractUrl(inputUrl);
+            const { finalUrl, result } = await fetchUrlContent(inputUrl);
             return {
               inputUrl,
               ok: true,

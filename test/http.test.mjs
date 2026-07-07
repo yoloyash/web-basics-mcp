@@ -32,6 +32,24 @@ test("sends the configured user agent", async () => {
   assert.equal(seenUserAgent, "web-basics-test/1.0");
 });
 
+test("sends additional configured headers", async () => {
+  let seenHeaders;
+  await fetchPublicHttpUrl("https://example.com/feed", {
+    fetchImpl: async (_url, init) => {
+      seenHeaders = init.headers;
+      return new Response("ok");
+    },
+    headers: { Accept: "application/atom+xml" },
+    lookupHost: publicLookup,
+    userAgent: "web-basics-test/1.0",
+    wait: noWait,
+  });
+
+  assert.equal(seenHeaders.Accept, "application/atom+xml");
+  assert.equal(seenHeaders["User-Agent"], "web-basics-test/1.0");
+  assert.deepEqual(Object.keys(seenHeaders), ["User-Agent", "Accept"]);
+});
+
 test("retries one transient HTTP status before succeeding", async () => {
   const statuses = [503, 200];
   let calls = 0;
@@ -45,6 +63,27 @@ test("retries one transient HTTP status before succeeding", async () => {
 
   assert.equal(calls, 2);
   assert.equal(result.res.status, 200);
+});
+
+test("can disable transient HTTP status retries", async () => {
+  let calls = 0;
+
+  await assert.rejects(
+    () =>
+      fetchPublicHttpUrl("https://example.com/page", {
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response("busy", { status: 429 });
+        },
+        lookupHost: publicLookup,
+        maxTransientRetries: 0,
+        retryDelayMs: 0,
+        wait: noWait,
+      }),
+    /HTTP status 429/,
+  );
+
+  assert.equal(calls, 1);
 });
 
 test("marks exhausted transient HTTP status as retryable", async () => {

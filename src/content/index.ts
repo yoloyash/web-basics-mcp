@@ -1,7 +1,8 @@
 import { extractPdfMarkdown, type PdfMarkdown } from "./pdf.js";
 import { extractReadableMarkdown, type ReadableMarkdown } from "./html.js";
+import type { RedditMarkdown } from "./reddit.js";
 
-type ExtractedReadableContent = (ReadableMarkdown | PdfMarkdown) & {
+type ExtractedReadableContent = (ReadableMarkdown | PdfMarkdown | RedditMarkdown) & {
   contentType: string;
 };
 
