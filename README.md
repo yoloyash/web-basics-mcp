@@ -1,25 +1,40 @@
 # web-basics-mcp
 
-Basic web tools for agents. No API keys.
+Small, dependable web tools for agents. No API keys and no bundled infrastructure.
 
-## What It Provides
+## Tools
 
-| Tool | Use it for |
+| Tool | What it does |
 | --- | --- |
-| `web_search` | Search one or more queries |
-| `fetch_url` | Fetch one or more pages, PDFs, and images |
-| `get_content` | Continue long `fetch_url` results |
-| `reddit_fetch` | Read a Reddit post and its comments |
+| `web_search` | Searches one query through an existing SearXNG instance |
+| `fetch_url` | Fetches one page, text document, PDF, image, or Reddit post |
 
-> Optional proxy/VPN routing helps with Reddit rate limits.
+`fetch_url` returns clean Markdown for HTML pages and Reddit posts, selectable text for PDFs, direct content for text/Markdown/JSON/XML responses, and native MCP image content for PNG, JPEG, WebP, and GIF images.
+
+Long text is read in bounded chunks. Call the same URL again with the returned `next_start_index`:
+
+```json
+{
+  "url": "https://example.com/long-page",
+  "start_index": 8000,
+  "max_length": 8000
+}
+```
 
 ## Requirements
 
 - Node.js 20.18.1 or newer
-- npm
-- Docker, only if you want to run the optional local SearXNG backend
+- An existing SearXNG instance with JSON responses enabled
 
-## Setup
+Set its base URL in the environment or in this package's `.env` file:
+
+```env
+SEARXNG_URL=http://127.0.0.1:8088
+```
+
+The server starts even when SearXNG is unavailable so `fetch_url` remains usable. Calls to `web_search` return a clear connection error until SearXNG is reachable.
+
+## Install
 
 ```bash
 git clone https://github.com/yoloyash/web-basics-mcp.git
@@ -28,100 +43,57 @@ npm install
 npm run build
 ```
 
-Optional: copy the example environment file if you want to change the search backend.
+Configure an MCP client to run `build/index.js` over stdio. For example:
 
 ```bash
-cp .env.example .env
+codex mcp add web-basics -- node /absolute/path/to/web-basics-mcp/build/index.js
 ```
 
-The server loads `.env` from the project directory, not the MCP client's working directory. Set `WEB_BASICS_ENV_FILE` to use a different env file.
+## Tool Inputs
 
-## Search Backend
-
-If you want local web search, start the bundled search backend:
-
-```bash
-docker compose up -d
-```
-
-Stop it with:
-
-```bash
-docker compose down
-```
-
-By default, the server expects search at `http://127.0.0.1:8088`. Set `SEARXNG_URL` if you use a different search backend.
-
-## Optional Proxy/VPN Routing
-
-If you already run a proxy behind a VPN, you can route outbound requests through it with standard proxy environment variables:
-
-```bash
-HTTPS_PROXY=http://127.0.0.1:19080
-HTTP_PROXY=http://127.0.0.1:19080
-NO_PROXY=127.0.0.1,localhost
-```
-
-This works with Gluetun's HTTP proxy, for example. Prefer a localhost or LAN-only proxy endpoint; do not expose it to the public internet.
-
-## Install In MCP Clients
-
-Replace `~/web-basics-mcp` with the path where you cloned this repo.
-
-<details>
-<summary><strong>Claude Code</strong></summary>
-
-```bash
-claude mcp add web-basics -- node ~/web-basics-mcp/build/index.js
-```
-</details>
-
-<details>
-<summary><strong>Codex</strong></summary>
-
-```bash
-codex mcp add web-basics -- node ~/web-basics-mcp/build/index.js
-```
-</details>
-
-<details>
-<summary><strong>OpenCode</strong></summary>
-
-Add this to your `opencode.json`, usually at `~/.config/opencode/opencode.json`:
+### `web_search`
 
 ```json
 {
-  "mcp": {
-    "web-basics": {
-      "type": "local",
-      "command": ["node", "~/web-basics-mcp/build/index.js"],
-      "environment": {
-        "SEARXNG_URL": "http://127.0.0.1:8088"
-      },
-      "enabled": true
-    }
-  }
+  "query": "Model Context Protocol",
+  "limit": 5
 }
 ```
 
-Replace the `SEARXNG_URL` value with your own SearXNG instance if it is not on localhost:8088.
-</details>
+`limit` defaults to 5 and accepts values from 1 through 10. Results use the stable shape `{link, title, snippet}`.
+
+### `fetch_url`
+
+```json
+{
+  "url": "https://example.com",
+  "start_index": 0,
+  "max_length": 8000
+}
+```
+
+- `start_index` defaults to 0.
+- `max_length` defaults to 8000 and is capped at 20000.
+- Text responses report `total_chars`, `returned_chars`, `truncated`, and, when more content remains, `next_start_index`.
+- HTML uses Defuddle first and Mozilla Readability as a gated fallback. The response reports the selected `extractor` and the fallback reason when applicable.
+- Defuddle's optional network-backed extractors are disabled. Every remote request stays in this server's validated HTTP path.
+- Reddit post URLs are fetched through Reddit's RSS feed and include the post plus comments available in that feed. RSS may contain fewer comments than the website.
+
+## Safety And Limits
+
+- Only public HTTP(S) URLs are accepted.
+- URL credentials, private hostnames, private DNS results, and unsafe redirects are rejected.
+- Each redirect is validated independently.
+- Requests use timeouts, bounded retries, response-size limits, and a stable user agent.
+- Standard responses and images are capped at 5 MiB; PDFs are capped at 15 MiB.
+
+This server intentionally does not provide browser automation, JavaScript rendering, crawling, authentication, cookies, proxy/VPN routing, or answer synthesis.
 
 ## Development
 
 ```bash
-npm run build
 npm test
+npm pack --dry-run
 ```
 
-## Under The Hood
-
-- The server runs as a local MCP server over stdio.
-- Search uses the SearXNG instance configured by `SEARXNG_URL`.
-- If `HTTP_PROXY` or `HTTPS_PROXY` is set, outbound requests use that proxy.
-- `fetch_url` only supports public HTTP(S) pages and blocks private/local addresses.
-- Set `WEB_BASICS_USER_AGENT` to customize the fetch user agent.
-- Reddit support uses Reddit's RSS feed, so it may return fewer comments than the full website.
-- Returned content is capped to keep MCP responses manageable.
-- Long `fetch_url` results include a `content_id` that can be continued with `get_content`.
-- Search quality depends on the engines enabled in your SearXNG configuration.
+Tests use saved fixtures and local stubs rather than repeatedly querying public services.
