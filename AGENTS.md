@@ -12,14 +12,11 @@
 |   |-- tools/        # thin register* tool adapters
 |   |   |-- index.ts
 |   |   |-- fetch-url.ts
-|   |   |-- get-content.ts
 |   |   `-- web-search.ts
-|   |-- lib/          # shared HTTP, fetch, search, reddit, store, env, and error helpers
+|   |-- lib/          # shared HTTP, search, Reddit, env, and error helpers
 |   `-- content/      # HTML, PDF, image, Reddit, and fetch routing
 |-- test/             # Node test runner tests and fixtures
-|-- build/            # compiled output
-|-- compose.yml       # optional local SearXNG service
-`-- searxng/          # local SearXNG settings
+`-- build/            # compiled output
 ```
 
 Keep this structure shallow. Tool files should register MCP tools and delegate real behavior to `src/lib/` or `src/content/`.
@@ -32,7 +29,7 @@ Keep this structure shallow. Tool files should register MCP tools and delegate r
 - `npm run dev`: watch TypeScript during development.
 - `npm test`: build and run the test suite.
 - `npm pack --dry-run`: check package contents and runtime build output.
-- `docker compose up -d`: start optional local SearXNG at `127.0.0.1:8088`.
+- `SEARXNG_URL=http://... node ...`: point an explicit live smoke test at an existing SearXNG instance. Keep normal tests offline.
 
 Run `npm test` before handing off code changes. Use `npm pack --dry-run` for package or publish-facing changes.
 
@@ -50,15 +47,17 @@ Tests use Node's built-in test runner and live in `test/`. Prefer focused behavi
 
 ## Security And Behavior
 
-- Preserve `fetch_url` protections for normal page, PDF, and image fetches: protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Reddit post URLs are validated against the Reddit host allowlist and still use `src/lib/http.ts`, but skip local DNS preflight so proxy routing stays faithful.
+- Preserve `fetch_url` protections for pages, PDFs, images, and Reddit: protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Reddit post URLs also use the public-address DNS check.
 
-- Preserve the existing single-input contracts when adding batch behavior. `web_search` accepts `query` or `queries`; `fetch_url` accepts `url` or `urls`.
+- HTML extraction is Defuddle-first with `useAsync: false`, followed by a gated Mozilla Readability fallback. Do not allow extractors to make network requests outside `src/lib/http.ts`.
 
-- Keep returned content bounded. Long `fetch_url` results should continue through `get_content` and the bounded content store, not larger inline MCP payloads.
+- Preserve the intentionally small single-input contracts: `web_search` accepts one `query`; `fetch_url` accepts one `url` plus `start_index` and `max_length`.
 
-- Runtime configuration loads from the package-root `.env` file, or from `WEB_BASICS_ENV_FILE` when set. Do not make config depend on the MCP client's working directory.
+- Keep returned content bounded. Long `fetch_url` results are continued by calling the same URL with the returned `next_start_index`.
 
-- Optional proxy/VPN routing is supported with standard proxy environment variables; it helps users route traffic through an existing VPN-backed proxy when rate limits are a problem.
+- Runtime configuration loads from the package-root `.env` file. Do not make config depend on the MCP client's working directory.
+
+- Do not add proxy/VPN routing. The only service configuration is `SEARXNG_URL`, which points at an existing SearXNG deployment.
 
 - Use `SEARXNG_URL` for search backend configuration. Keep returned content bounded and leave answer synthesis to the client/model rather than hiding it inside the server.
 

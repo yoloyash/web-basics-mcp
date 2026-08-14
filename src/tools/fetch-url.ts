@@ -2,41 +2,31 @@ import { Buffer } from "node:buffer";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { fetchUrlContent, recommendedFetchConcurrency } from "../content/fetch.js";
+import { fetchUrlContent } from "../content/fetch.js";
 import type { ExtractedContent } from "../content/index.js";
-import { contentStore, type ContentStore } from "../lib/content-store.js";
 import { classifyError, validationError } from "../lib/errors.js";
 
-const MAX_CONTENT_CHARS = 8000;
-const MAX_BATCH_URLS = 5;
-const BATCH_CONCURRENCY = 3;
+export const DEFAULT_MAX_LENGTH = 8000;
+export const MAX_LENGTH = 20000;
 
 export function formatFetchedContent(
   finalUrl: string,
   result: ExtractedContent,
-  store: ContentStore = contentStore,
+  startIndex = 0,
+  maxLength = DEFAULT_MAX_LENGTH,
 ): CallToolResult {
-  if (result.extractor === "image") {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(formatFetchedPayload(finalUrl, result, store), null, 2),
-        },
-        {
-          type: "image",
-          data: Buffer.from(result.data).toString("base64"),
-          mimeType: result.contentType,
-        },
-      ],
-    };
+  const payload = formatFetchedPayload(finalUrl, result, startIndex, maxLength);
+  if (result.extractor !== "image") {
+    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
   }
 
   return {
     content: [
+      { type: "text", text: JSON.stringify(payload, null, 2) },
       {
-        type: "text",
-        text: JSON.stringify(formatFetchedPayload(finalUrl, result, store), null, 2),
+        type: "image",
+        data: Buffer.from(result.data).toString("base64"),
+        mimeType: result.contentType,
       },
     ],
   };
@@ -45,9 +35,11 @@ export function formatFetchedContent(
 export function formatFetchedPayload(
   finalUrl: string,
   result: ExtractedContent,
-  store: ContentStore = contentStore,
+  startIndex = 0,
+  maxLength = DEFAULT_MAX_LENGTH,
 ): Record<string, unknown> {
   if (result.extractor === "image") {
+    if (startIndex !== 0) throw validationError("start_index is only supported for text content");
     return {
       url: finalUrl,
       contentType: result.contentType,
@@ -56,31 +48,29 @@ export function formatFetchedPayload(
     };
   }
 
-  const content = result.content.slice(0, MAX_CONTENT_CHARS);
-  const truncated = result.content.length > MAX_CONTENT_CHARS;
+  const totalChars = result.content.length;
+  if (startIndex > totalChars) throw validationError("start_index cannot exceed content length");
+
+  const endIndex = Math.min(startIndex + maxLength, totalChars);
+  const content = result.content.slice(startIndex, endIndex);
+  const truncated = endIndex < totalChars;
   const payload: Record<string, unknown> = {
     url: finalUrl,
     title: result.title,
     content,
     wordCount: result.wordCount,
     contentType: result.contentType,
-    truncated,
     extractor: result.extractor,
+    start_index: startIndex,
+    returned_chars: content.length,
+    total_chars: totalChars,
+    truncated,
   };
 
-  if (truncated) {
-    payload.content_id = store.put({
-      url: finalUrl,
-      title: result.title,
-      content: result.content,
-      contentType: result.contentType,
-      extractor: result.extractor,
-    });
-    payload.total_chars = result.content.length;
-    payload.returned_chars = content.length;
-    payload.next_offset = content.length;
+  if (truncated) payload.next_start_index = endIndex;
+  if ("fallbackReason" in result && result.fallbackReason) {
+    payload.fallback_reason = result.fallbackReason;
   }
-
   if ("pageCount" in result) {
     payload.pageCount = result.pageCount;
     payload.metadata = result.metadata;
@@ -90,88 +80,22 @@ export function formatFetchedPayload(
   return payload;
 }
 
-async function mapWithConcurrency<T, U>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T) => Promise<U>,
-): Promise<U[]> {
-  const results = new Array<U>(items.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index]);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
-  return results;
-}
-
 export default function registerFetchUrl(server: McpServer) {
   server.registerTool(
     "fetch_url",
     {
       description:
-        "Fetch one URL or a small batch of URLs and extract clean markdown from web pages, PDFs, or Reddit posts, or return supported images.",
+        "Fetch one public HTTP(S) URL. Returns clean Markdown for pages and Reddit posts, extracted PDF text, direct text data, or a supported image. Use start_index to continue truncated text.",
       inputSchema: {
-        url: z.string().url().optional().describe("Target URL"),
-        urls: z.array(z.string().url()).min(1).max(MAX_BATCH_URLS).optional().describe("Target URLs"),
+        url: z.string().url().describe("Target URL"),
+        start_index: z.number().int().min(0).default(0).describe("Character index to start text content from"),
+        max_length: z.number().int().min(1).max(MAX_LENGTH).default(DEFAULT_MAX_LENGTH).describe("Maximum text characters to return"),
       },
     },
-    async ({ url, urls }) => {
+    async ({ url, start_index, max_length }) => {
       try {
-        if (url && urls) throw validationError("Use either url or urls, not both");
-        if (!url && !urls) throw validationError("Provide url or urls");
-
-        if (url) {
-          const { finalUrl, result } = await fetchUrlContent(url);
-          return formatFetchedContent(finalUrl, result);
-        }
-
-        const inputUrls = urls ?? [];
-        const results = await mapWithConcurrency(inputUrls, recommendedFetchConcurrency(inputUrls, BATCH_CONCURRENCY), async (inputUrl) => {
-          try {
-            const { finalUrl, result } = await fetchUrlContent(inputUrl);
-            return {
-              inputUrl,
-              ok: true,
-              result: formatFetchedPayload(finalUrl, result),
-            };
-          } catch (err) {
-            const { category, message, retryable } = classifyError(err);
-            return {
-              inputUrl,
-              ok: false,
-              error: {
-                category,
-                message,
-                ...(typeof retryable === "boolean" ? { retryable } : {}),
-              },
-            };
-          }
-        });
-
-        const failedCount = results.filter((result) => !result.ok).length;
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  results,
-                  fetchedCount: results.length - failedCount,
-                  failedCount,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: failedCount === results.length,
-        };
+        const { finalUrl, result } = await fetchUrlContent(url);
+        return formatFetchedContent(finalUrl, result, start_index, max_length);
       } catch (err) {
         const { category, message, retryable } = classifyError(err);
         const retryHint = typeof retryable === "boolean" ? ` (retryable: ${retryable})` : "";

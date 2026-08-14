@@ -8,8 +8,6 @@ const REDDIT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0";
 const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com"]);
 const CACHE_TTL_MS = 60_000;
-const MAX_POST_CHARS = 8000;
-const MAX_COMMENT_CHARS = 2000;
 const MAX_CACHE_ENTRIES = 100;
 
 type RedditFetchOptions = Pick<
@@ -68,7 +66,6 @@ export async function fetchRedditPost(url: string, options: RedditFetchOptions =
     maxTransientRetries: 0,
     timeoutMs: FETCH_TIMEOUT_MS,
     userAgent: REDDIT_USER_AGENT,
-    validatePublicAddress: false,
   });
 
   const xml = new TextDecoder("utf-8", { fatal: false }).decode(await readBytesCapped(res, MAX_REDDIT_RSS_BYTES));
@@ -87,7 +84,7 @@ export async function fetchRedditPost(url: string, options: RedditFetchOptions =
     author: postItem.author || "",
     published: postItem.isoDate || "",
     link: postItem.link || "",
-    content: cleanContent(postItem.contentSnippet).slice(0, MAX_POST_CHARS),
+    content: cleanContent(postItem.contentSnippet),
   };
 
   const comments: RedditComment[] = commentItems.map((item) => ({
@@ -95,7 +92,7 @@ export async function fetchRedditPost(url: string, options: RedditFetchOptions =
     author: item.author || "",
     published: item.isoDate || "",
     link: item.link || "",
-    content: (item.contentSnippet || "").trim().slice(0, MAX_COMMENT_CHARS),
+    content: (item.contentSnippet || "").trim(),
   }));
 
   const result = {

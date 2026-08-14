@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fetchUrlContent, recommendedFetchConcurrency } from "../build/content/fetch.js";
+import { fetchUrlContent } from "../build/content/fetch.js";
 import { formatRedditMarkdown } from "../build/content/reddit.js";
 import { fetchRedditPost } from "../build/lib/reddit.js";
 
@@ -43,15 +43,7 @@ test("rejects non-post Reddit URLs before generic fetching", async () => {
   );
 });
 
-test("recommends sequential batch fetches when Reddit URLs are included", () => {
-  assert.equal(recommendedFetchConcurrency(["https://example.com"], 3), 3);
-  assert.equal(
-    recommendedFetchConcurrency(["https://example.com", "https://www.reddit.com/r/LocalLLaMA/comments/abc123/title/"], 3),
-    1,
-  );
-});
-
-test("fetches Reddit RSS with legacy headers, no retry, and no local DNS lookup", async () => {
+test("fetches Reddit RSS with legacy headers, no retry, and public DNS validation", async () => {
   let calls = 0;
   let seenUrl;
   let seenHeaders;
@@ -68,12 +60,12 @@ test("fetches Reddit RSS with legacy headers, no retry, and no local DNS lookup"
     },
     lookupHost: async () => {
       lookupCalls += 1;
-      throw new Error("lookup should not run for allowlisted Reddit URLs");
+      return [{ address: "151.101.1.140", family: 4 }];
     },
   });
 
   assert.equal(calls, 1);
-  assert.equal(lookupCalls, 0);
+  assert.equal(lookupCalls, 1);
   assert.equal(seenUrl, "https://www.reddit.com/r/LocalLLaMA/comments/abc123/title/.rss");
   assert.deepEqual(Object.keys(seenHeaders), ["User-Agent", "Accept"]);
   assert.equal(seenHeaders.Accept, "application/atom+xml, application/xml, text/xml, */*");

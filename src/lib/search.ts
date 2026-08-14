@@ -1,5 +1,4 @@
 import { validationError } from "./errors.js";
-import { fetch } from "./fetch.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_QUERY_LENGTH = 500;
@@ -20,7 +19,10 @@ export async function searchSearxng(normalizedQuery: NormalizedQuery): Promise<S
   url.searchParams.set("safesearch", "1");
   url.searchParams.set("language", "all");
 
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  const res = await globalThis.fetch(url.toString(), {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`HTTP status ${res.status} from SearXNG`);
 
   const json = (await res.json()) as { results?: SearxResult[] };

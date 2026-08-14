@@ -15,10 +15,6 @@ export interface FetchedUrlContent {
   result: ExtractedContent;
 }
 
-export function recommendedFetchConcurrency(urls: string[], defaultConcurrency: number): number {
-  return urls.some(isRedditUrl) ? 1 : defaultConcurrency;
-}
-
 export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
   if (isRedditUrl(url)) {
     return fetchRedditContent(url);
@@ -31,5 +27,9 @@ export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
     fetchByteLimitForContentType(responseContentType, MAX_FETCH_BYTES, MAX_PDF_FETCH_BYTES),
   );
 
-  return { finalUrl, result: await extractFetchedContent(body, finalUrl, responseContentType) };
+  const result = await extractFetchedContent(body, finalUrl, responseContentType);
+  if (result.extractor === "image" && result.byteLength > MAX_FETCH_BYTES) {
+    throw new Error("Body too large");
+  }
+  return { finalUrl, result };
 }

@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -11,24 +10,13 @@ export interface LoadEnvOptions {
 export function loadEnv(options: LoadEnvOptions = {}): void {
   const env = options.env ?? process.env;
   const packageRoot = options.packageRoot ?? defaultPackageRoot();
-  const paths = envFilePaths(packageRoot, env);
-
-  if (paths.length === 0) return;
 
   dotenv.config({
-    path: paths,
+    path: resolve(packageRoot, ".env"),
     processEnv: env,
     override: false,
     quiet: true,
   });
-}
-
-function envFilePaths(packageRoot: string, env: NodeJS.ProcessEnv): string[] {
-  const paths = [env.WEB_BASICS_ENV_FILE, resolve(packageRoot, ".env")].flatMap((path) =>
-    path && existsSync(path) ? [path] : [],
-  );
-
-  return [...new Set(paths)];
 }
 
 function defaultPackageRoot(): string {

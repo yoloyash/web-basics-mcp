@@ -5,19 +5,12 @@ import {
   DEFAULT_USER_AGENT,
   fetchPublicHttpUrl,
   readBytesCapped,
-  resolveUserAgent,
 } from "../build/lib/http.js";
 
 const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 const noWait = async () => {};
 
-test("resolves default and custom fetch user agents", () => {
-  assert.equal(resolveUserAgent({}), DEFAULT_USER_AGENT);
-  assert.equal(resolveUserAgent({ WEB_BASICS_USER_AGENT: "  custom-agent/1.0  " }), "custom-agent/1.0");
-  assert.equal(resolveUserAgent({ WEB_BASICS_USER_AGENT: "   " }), DEFAULT_USER_AGENT);
-});
-
-test("sends the configured user agent", async () => {
+test("sends the default user agent", async () => {
   let seenUserAgent;
   await fetchPublicHttpUrl("https://example.com/page", {
     fetchImpl: async (_url, init) => {
@@ -25,11 +18,10 @@ test("sends the configured user agent", async () => {
       return new Response("ok");
     },
     lookupHost: publicLookup,
-    userAgent: "web-basics-test/1.0",
     wait: noWait,
   });
 
-  assert.equal(seenUserAgent, "web-basics-test/1.0");
+  assert.equal(seenUserAgent, DEFAULT_USER_AGENT);
 });
 
 test("sends additional configured headers", async () => {
@@ -182,4 +174,10 @@ test("marks oversized bodies as non-retryable", async () => {
       return true;
     },
   );
+});
+
+test("classifies unsupported binary content as a terminal validation error", () => {
+  const error = classifyError(new Error("Unsupported content-type: application/zip"));
+  assert.equal(error.category, "validation");
+  assert.equal(error.retryable, false);
 });

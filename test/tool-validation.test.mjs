@@ -18,47 +18,32 @@ after(async () => {
   await client?.close();
 });
 
-test("registers the expected tools", async () => {
+test("registers only the two basic web tools", async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["fetch_url", "get_content", "web_search"],
+    ["fetch_url", "web_search"],
   );
 
   const fetchTool = tools.find((tool) => tool.name === "fetch_url");
+  const searchTool = tools.find((tool) => tool.name === "web_search");
   assert.ok(fetchTool);
+  assert.ok(searchTool);
   assert.match(fetchTool.description, /PDF/);
-  assert.match(fetchTool.description, /images/);
+  assert.match(fetchTool.description, /image/);
   assert.match(fetchTool.description, /Reddit/);
+  assert.deepEqual(Object.keys(fetchTool.inputSchema.properties).sort(), [
+    "max_length",
+    "start_index",
+    "url",
+  ]);
+  assert.deepEqual(Object.keys(searchTool.inputSchema.properties).sort(), ["limit", "query"]);
 });
 
 test("web_search rejects blank queries before calling SearXNG", async () => {
   const result = await client.callTool({
     name: "web_search",
     arguments: { query: "   " },
-  });
-
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Query cannot be empty/);
-});
-
-test("web_search rejects query and queries together", async () => {
-  const result = await client.callTool({
-    name: "web_search",
-    arguments: {
-      query: "typescript",
-      queries: ["node"],
-    },
-  });
-
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Use either query or queries, not both/);
-});
-
-test("web_search rejects blank values in queries before calling SearXNG", async () => {
-  const result = await client.callTool({
-    name: "web_search",
-    arguments: { queries: ["typescript", "   "] },
   });
 
   assert.equal(result.isError, true);
@@ -85,49 +70,18 @@ test("fetch_url rejects unsupported protocols", async () => {
   assert.match(result.content[0].text, /^validation: Unsupported protocol/);
 });
 
-test("fetch_url rejects url and urls together", async () => {
-  const result = await client.callTool({
+test("fetch_url validates continuation bounds in its input schema", async () => {
+  const negativeOffset = await client.callTool({
     name: "fetch_url",
-    arguments: {
-      url: "https://example.com",
-      urls: ["https://example.org"],
-    },
+    arguments: { url: "https://example.com", start_index: -1 },
   });
+  assert.equal(negativeOffset.isError, true);
 
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Use either url or urls, not both/);
-});
-
-test("fetch_url batch returns per-url validation errors", async () => {
-  const result = await client.callTool({
+  const excessiveLength = await client.callTool({
     name: "fetch_url",
-    arguments: {
-      urls: ["http://localhost:8088", "ftp://example.com/file.txt"],
-    },
+    arguments: { url: "https://example.com", max_length: 20001 },
   });
-
-  assert.equal(result.isError, true);
-  const payload = JSON.parse(result.content[0].text);
-  assert.equal(payload.fetchedCount, 0);
-  assert.equal(payload.failedCount, 2);
-  assert.deepEqual(
-    payload.results.map((item) => item.inputUrl),
-    ["http://localhost:8088", "ftp://example.com/file.txt"],
-  );
-  assert.deepEqual(
-    payload.results.map((item) => item.error.category),
-    ["validation", "validation"],
-  );
-});
-
-test("get_content rejects unknown content ids", async () => {
-  const result = await client.callTool({
-    name: "get_content",
-    arguments: { content_id: "missing" },
-  });
-
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Unknown or expired content_id/);
+  assert.equal(excessiveLength.isError, true);
 });
 
 test("fetch_url rejects non-post Reddit URLs", async () => {

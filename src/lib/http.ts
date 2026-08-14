@@ -2,7 +2,6 @@ import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { validationError } from "./errors.js";
-import { fetch } from "./fetch.js";
 
 export const DEFAULT_USER_AGENT = "mcp-web-basics/1.0";
 
@@ -18,7 +17,7 @@ const NETWORK_MESSAGES = new Set([
   "socket hang up",
 ]);
 
-type FetchLike = typeof fetch;
+type FetchLike = typeof globalThis.fetch;
 type LookupHost = (hostname: string) => Promise<LookupAddress[]>;
 
 export interface FetchPublicHttpOptions {
@@ -55,10 +54,6 @@ export class HttpStatusError extends Error {
     this.status = status;
     this.retryable = isRetryableHttpStatus(status);
   }
-}
-
-export function resolveUserAgent(env: Record<string, string | undefined> = process.env): string {
-  return env.WEB_BASICS_USER_AGENT?.trim() || DEFAULT_USER_AGENT;
 }
 
 export async function fetchPublicHttpUrl(
@@ -145,13 +140,13 @@ export async function readBytesCapped(res: Response, maxBytes: number): Promise<
 
 function normalizeFetchOptions(options: FetchPublicHttpOptions): FetchConfig {
   return {
-    fetchImpl: options.fetchImpl ?? fetch,
+    fetchImpl: options.fetchImpl ?? globalThis.fetch,
     headers: options.headers ?? {},
     lookupHost: options.lookupHost ?? lookupHost,
     maxTransientRetries: options.maxTransientRetries ?? MAX_TRANSIENT_RETRIES,
     retryDelayMs: options.retryDelayMs ?? RETRY_DELAY_MS,
     timeoutMs: options.timeoutMs ?? FETCH_TIMEOUT_MS,
-    userAgent: options.userAgent?.trim() || resolveUserAgent(),
+    userAgent: options.userAgent?.trim() || DEFAULT_USER_AGENT,
     validatePublicAddress: options.validatePublicAddress ?? true,
     wait: options.wait ?? wait,
   };
