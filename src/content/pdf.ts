@@ -40,7 +40,7 @@ export async function extractPdfMarkdown(data: Uint8Array, finalUrl: string): Pr
       links: [...new Set(linkResult.links)],
     };
   } finally {
-    await pdf.destroy();
+    await pdf.cleanup();
   }
 }
 

@@ -2,89 +2,100 @@ import { Buffer } from "node:buffer";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import {
-  extractFetchedContent,
-  fetchByteLimitForContentType,
-  type ExtractedContent,
-} from "../content/index.js";
-import { classifyError } from "../lib/errors.js";
-import { fetchPublicHttpUrl, readBytesCapped } from "../lib/http.js";
+import { fetchUrlContent } from "../content/fetch.js";
+import type { ExtractedContent } from "../content/index.js";
+import { classifyError, validationError } from "../lib/errors.js";
 
-const MAX_CONTENT_CHARS = 8000;
-const MAX_FETCH_BYTES = 5 * 1024 * 1024;
-const MAX_PDF_FETCH_BYTES = 15 * 1024 * 1024;
+export const DEFAULT_MAX_LENGTH = 8000;
+export const MAX_LENGTH = 20000;
 
-export function formatFetchedContent(finalUrl: string, result: ExtractedContent): CallToolResult {
+export function formatFetchedContent(
+  finalUrl: string,
+  result: ExtractedContent,
+  startIndex = 0,
+  maxLength = DEFAULT_MAX_LENGTH,
+): CallToolResult {
+  const payload = formatFetchedPayload(finalUrl, result, startIndex, maxLength);
+  if (result.extractor !== "image") {
+    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+  }
+
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(payload, null, 2) },
+      {
+        type: "image",
+        data: Buffer.from(result.data).toString("base64"),
+        mimeType: result.contentType,
+      },
+    ],
+  };
+}
+
+export function formatFetchedPayload(
+  finalUrl: string,
+  result: ExtractedContent,
+  startIndex = 0,
+  maxLength = DEFAULT_MAX_LENGTH,
+): Record<string, unknown> {
   if (result.extractor === "image") {
-    const payload: Record<string, unknown> = {
+    if (startIndex !== 0) throw validationError("start_index is only supported for text content");
+    return {
       url: finalUrl,
       contentType: result.contentType,
       byteLength: result.byteLength,
       extractor: result.extractor,
     };
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(payload, null, 2),
-        },
-        {
-          type: "image",
-          data: Buffer.from(result.data).toString("base64"),
-          mimeType: result.contentType,
-        },
-      ],
-    };
   }
 
-  const content = result.content.slice(0, MAX_CONTENT_CHARS);
+  const totalChars = result.content.length;
+  if (startIndex > totalChars) throw validationError("start_index cannot exceed content length");
+
+  const endIndex = Math.min(startIndex + maxLength, totalChars);
+  const content = result.content.slice(startIndex, endIndex);
+  const truncated = endIndex < totalChars;
   const payload: Record<string, unknown> = {
     url: finalUrl,
     title: result.title,
     content,
     wordCount: result.wordCount,
     contentType: result.contentType,
-    truncated: result.content.length > MAX_CONTENT_CHARS,
     extractor: result.extractor,
+    start_index: startIndex,
+    returned_chars: content.length,
+    total_chars: totalChars,
+    truncated,
   };
 
+  if (truncated) payload.next_start_index = endIndex;
+  if ("fallbackReason" in result && result.fallbackReason) {
+    payload.fallback_reason = result.fallbackReason;
+  }
   if ("pageCount" in result) {
     payload.pageCount = result.pageCount;
     payload.metadata = result.metadata;
     payload.links = result.links;
   }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(payload, null, 2),
-      },
-    ],
-  };
+  return payload;
 }
 
 export default function registerFetchUrl(server: McpServer) {
   server.registerTool(
     "fetch_url",
     {
-      description: "Fetch URL and extract clean markdown from web pages or PDFs, or return supported images.",
-      inputSchema: { url: z.string().url().describe("Target URL") },
+      description:
+        "Fetch one public HTTP(S) URL. Returns clean Markdown for pages and Reddit posts, extracted PDF text, direct text data, or a supported image. Use start_index to continue truncated text.",
+      inputSchema: {
+        url: z.string().url().describe("Target URL"),
+        start_index: z.number().int().min(0).default(0).describe("Character index to start text content from"),
+        max_length: z.number().int().min(1).max(MAX_LENGTH).default(DEFAULT_MAX_LENGTH).describe("Maximum text characters to return"),
+      },
     },
-    async ({ url }) => {
+    async ({ url, start_index, max_length }) => {
       try {
-        const { res, finalUrl } = await fetchPublicHttpUrl(url);
-        if (!res.ok) throw new Error(`HTTP status ${res.status}`);
-
-        const responseContentType = res.headers.get("content-type");
-        const body = await readBytesCapped(
-          res,
-          fetchByteLimitForContentType(responseContentType, MAX_FETCH_BYTES, MAX_PDF_FETCH_BYTES),
-        );
-
-        const result = await extractFetchedContent(body, finalUrl, responseContentType);
-        return formatFetchedContent(finalUrl, result);
+        const { finalUrl, result } = await fetchUrlContent(url);
+        return formatFetchedContent(finalUrl, result, start_index, max_length);
       } catch (err) {
         const { category, message, retryable } = classifyError(err);
         const retryHint = typeof retryable === "boolean" ? ` (retryable: ${retryable})` : "";

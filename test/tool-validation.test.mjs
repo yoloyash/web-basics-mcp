@@ -18,42 +18,31 @@ after(async () => {
   await client?.close();
 });
 
-test("registers the expected tools", async () => {
+test("registers only the two basic web tools", async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["fetch_url", "reddit_fetch", "reddit_search", "web_search"],
+    ["fetch_url", "web_search"],
   );
 
   const fetchTool = tools.find((tool) => tool.name === "fetch_url");
+  const searchTool = tools.find((tool) => tool.name === "web_search");
   assert.ok(fetchTool);
+  assert.ok(searchTool);
   assert.match(fetchTool.description, /PDF/);
-  assert.match(fetchTool.description, /images/);
+  assert.match(fetchTool.description, /image/);
+  assert.match(fetchTool.description, /Reddit/);
+  assert.deepEqual(Object.keys(fetchTool.inputSchema.properties).sort(), [
+    "max_length",
+    "start_index",
+    "url",
+  ]);
+  assert.deepEqual(Object.keys(searchTool.inputSchema.properties).sort(), ["limit", "query"]);
 });
 
 test("web_search rejects blank queries before calling SearXNG", async () => {
   const result = await client.callTool({
     name: "web_search",
-    arguments: { query: "   " },
-  });
-
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Query cannot be empty/);
-});
-
-test("reddit_search validates subreddit names", async () => {
-  const result = await client.callTool({
-    name: "reddit_search",
-    arguments: { query: "typescript", subreddit: "bad/subreddit" },
-  });
-
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Invalid subreddit/);
-});
-
-test("reddit_search rejects blank queries before calling SearXNG", async () => {
-  const result = await client.callTool({
-    name: "reddit_search",
     arguments: { query: "   " },
   });
 
@@ -81,12 +70,26 @@ test("fetch_url rejects unsupported protocols", async () => {
   assert.match(result.content[0].text, /^validation: Unsupported protocol/);
 });
 
-test("reddit_fetch rejects non-Reddit URLs", async () => {
+test("fetch_url validates continuation bounds in its input schema", async () => {
+  const negativeOffset = await client.callTool({
+    name: "fetch_url",
+    arguments: { url: "https://example.com", start_index: -1 },
+  });
+  assert.equal(negativeOffset.isError, true);
+
+  const excessiveLength = await client.callTool({
+    name: "fetch_url",
+    arguments: { url: "https://example.com", max_length: 20001 },
+  });
+  assert.equal(excessiveLength.isError, true);
+});
+
+test("fetch_url rejects non-post Reddit URLs", async () => {
   const result = await client.callTool({
-    name: "reddit_fetch",
-    arguments: { url: "https://example.com/r/typescript/comments/abc/title/" },
+    name: "fetch_url",
+    arguments: { url: "https://www.reddit.com/r/typescript/" },
   });
 
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^validation: Only Reddit post URLs are supported/);
+  assert.match(result.content[0].text, /^validation: URL must be a Reddit post URL/);
 });

@@ -1,18 +1,17 @@
 import Parser from "rss-parser";
-import { normalizeQuery, searchSearxng } from "./search.js";
 import { validationError } from "./errors.js";
+import { fetchPublicHttpUrl, readBytesCapped, type FetchPublicHttpOptions } from "./http.js";
 
 const FETCH_TIMEOUT_MS = 15000;
+const MAX_REDDIT_RSS_BYTES = 5 * 1024 * 1024;
+const REDDIT_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0";
 const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com"]);
-const CACHE_TTL_MS = 60_000;
-const MAX_POST_CHARS = 8000;
-const MAX_COMMENT_CHARS = 2000;
-const MAX_CACHE_ENTRIES = 100;
 
-export const DEFAULT_COMMENT_LIMIT = 100;
-export const MAX_COMMENT_LIMIT = 500;
-
-const postCache = new Map<string, { expiresAt: number; result: RedditFetchResult }>();
+type RedditFetchOptions = Pick<
+  FetchPublicHttpOptions,
+  "fetchImpl" | "lookupHost" | "retryDelayMs" | "wait"
+>;
 
 interface RedditPostUrl {
   canonicalUrl: string;
@@ -22,7 +21,7 @@ interface RedditPostUrl {
   slug: string;
 }
 
-interface RedditPost {
+export interface RedditPost {
   id: string;
   title: string;
   author: string;
@@ -31,23 +30,12 @@ interface RedditPost {
   content: string;
 }
 
-interface RedditComment {
+export interface RedditComment {
   id: string;
   author: string;
   published: string;
   link: string;
   content: string;
-}
-
-export interface RedditSearchResult {
-  title: string;
-  link: string;
-  subreddit: string;
-  post_id: string;
-  slug: string;
-  search_score: number | null;
-  source_engines: string[];
-  snippet: string;
 }
 
 export interface RedditFetchResult {
@@ -55,67 +43,23 @@ export interface RedditFetchResult {
   subreddit: string;
   post: RedditPost;
   comments: RedditComment[];
-  comments_returned: number;
-  comments_available: number;
 }
 
-export async function searchRedditPosts(
-  query: string,
-  subreddit: string | undefined,
-  limit: number,
-): Promise<RedditSearchResult[]> {
-  const normalizedQuery = normalizeQuery(query);
-  const normalizedSubreddit = normalizeSubreddit(subreddit);
-  const siteQuery = normalizedSubreddit
-    ? `site:reddit.com/r/${normalizedSubreddit}/comments ${normalizedQuery}`
-    : `site:reddit.com/r/ ${normalizedQuery}`;
-
-  const seen = new Set<string>();
-  const results = await searchSearxng(siteQuery);
-
-  return results
-    .flatMap((result) => {
-      const postUrl = parseRedditPostUrl(result.url);
-      if (!postUrl) return [];
-      if (normalizedSubreddit && postUrl.subreddit.toLowerCase() !== normalizedSubreddit.toLowerCase()) return [];
-      if (seen.has(postUrl.postId)) return [];
-      seen.add(postUrl.postId);
-
-      return [
-        {
-          title: cleanTitle(result.title) || postUrl.slug.replaceAll("_", " "),
-          link: postUrl.canonicalUrl,
-          subreddit: `r/${postUrl.subreddit}`,
-          post_id: postUrl.postId,
-          slug: postUrl.slug,
-          search_score: result.score ?? null,
-          source_engines: result.engines ?? [],
-          snippet: result.content ?? "",
-        },
-      ];
-    })
-    .slice(0, limit);
-}
-
-export async function fetchRedditPost(url: string, commentsLimit: number): Promise<RedditFetchResult> {
+export async function fetchRedditPost(url: string, options: RedditFetchOptions = {}): Promise<RedditFetchResult> {
   const postUrl = requireRedditPostUrl(url);
-  pruneExpiredCache();
 
-  const cached = postCache.get(postUrl.canonicalUrl);
-  if (cached && cached.expiresAt > Date.now()) {
-    return withCommentLimit(cached.result, commentsLimit);
-  }
+  const parser = new Parser();
 
-  const parser = new Parser({
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0",
-      Accept: "application/atom+xml, application/xml, text/xml, */*",
-    },
-    timeout: FETCH_TIMEOUT_MS,
+  const { res } = await fetchPublicHttpUrl(postUrl.rssUrl, {
+    ...options,
+    headers: { Accept: "application/atom+xml, application/xml, text/xml, */*" },
+    maxTransientRetries: 0,
+    timeoutMs: FETCH_TIMEOUT_MS,
+    userAgent: REDDIT_USER_AGENT,
   });
 
-  const feed = await parser.parseURL(postUrl.rssUrl);
+  const xml = new TextDecoder("utf-8", { fatal: false }).decode(await readBytesCapped(res, MAX_REDDIT_RSS_BYTES));
+  const feed = await parser.parseString(xml);
   if (!feed.items || feed.items.length === 0) {
     throw validationError("No items found in the RSS feed. Make sure the URL is a valid Reddit post.");
   }
@@ -130,7 +74,7 @@ export async function fetchRedditPost(url: string, commentsLimit: number): Promi
     author: postItem.author || "",
     published: postItem.isoDate || "",
     link: postItem.link || "",
-    content: cleanContent(postItem.contentSnippet).slice(0, MAX_POST_CHARS),
+    content: cleanContent(postItem.contentSnippet),
   };
 
   const comments: RedditComment[] = commentItems.map((item) => ({
@@ -138,45 +82,24 @@ export async function fetchRedditPost(url: string, commentsLimit: number): Promi
     author: item.author || "",
     published: item.isoDate || "",
     link: item.link || "",
-    content: (item.contentSnippet || "").trim().slice(0, MAX_COMMENT_CHARS),
+    content: (item.contentSnippet || "").trim(),
   }));
 
-  const result = {
+  return {
     url: postUrl.canonicalUrl,
     subreddit: subreddit || postUrl.subreddit,
     post,
     comments,
-    comments_returned: comments.length,
-    comments_available: comments.length,
   };
-
-  postCache.set(postUrl.canonicalUrl, { expiresAt: Date.now() + CACHE_TTL_MS, result });
-  trimCache();
-  return withCommentLimit(result, commentsLimit);
 }
 
-function normalizeSubreddit(input?: string): string | undefined {
-  if (!input) return undefined;
-
-  const name = input.trim().replace(/^\/?r\//i, "");
-  if (!name) return undefined;
-  if (!/^[a-zA-Z0-9_]{2,21}$/.test(name)) {
-    throw validationError("Invalid subreddit. Use a subreddit name like typescript or r/typescript.");
-  }
-
-  return name;
-}
-
-function parseRedditPostUrl(rawUrl: string): RedditPostUrl | undefined {
-  let url: URL;
+export function isRedditUrl(rawUrl: string): boolean {
   try {
-    url = new URL(rawUrl);
+    const url = new URL(rawUrl);
+    return REDDIT_HOSTS.has(url.hostname.toLowerCase());
   } catch {
-    return undefined;
+    return false;
   }
-
-  if (!REDDIT_HOSTS.has(url.hostname.toLowerCase())) return undefined;
-  return parseRedditPostPath(url.pathname);
 }
 
 function requireRedditPostUrl(rawUrl: string): RedditPostUrl {
@@ -232,10 +155,6 @@ function parseRedditPostPath(pathname: string): RedditPostUrl | undefined {
   };
 }
 
-function cleanTitle(title?: string): string {
-  return (title ?? "").replace(/\s+-\s+Reddit$/i, "").trim();
-}
-
 function cleanContent(text?: string): string {
   if (!text) return "";
   return text
@@ -246,29 +165,4 @@ function cleanContent(text?: string): string {
 
 function stripRssSuffix(value: string): string {
   return value.replace(/\.rss$/i, "");
-}
-
-function withCommentLimit(result: RedditFetchResult, commentsLimit: number): RedditFetchResult {
-  const comments = result.comments.slice(0, commentsLimit);
-  return {
-    ...result,
-    comments,
-    comments_returned: comments.length,
-    comments_available: result.comments_available,
-  };
-}
-
-function pruneExpiredCache(): void {
-  const now = Date.now();
-  for (const [key, value] of postCache) {
-    if (value.expiresAt <= now) postCache.delete(key);
-  }
-}
-
-function trimCache(): void {
-  while (postCache.size > MAX_CACHE_ENTRIES) {
-    const oldestKey = postCache.keys().next().value;
-    if (!oldestKey) return;
-    postCache.delete(oldestKey);
-  }
 }

@@ -53,6 +53,10 @@ export function classifyError(err: unknown): ClassifiedError {
     return { category: "validation", message: msg, retryable: false };
   }
 
+  if (msg.startsWith("Unsupported content-type:")) {
+    return { category: "validation", message: msg, retryable: false };
+  }
+
   if (/parse|invalid xml|unexpected token|malformed/i.test(msg)) {
     return { category: "parse", message: `Failed to parse response: ${msg}` };
   }
