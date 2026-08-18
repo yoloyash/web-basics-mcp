@@ -1,7 +1,11 @@
+import { TtlLruCache } from "./cache.js";
 import { validationError } from "./errors.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_QUERY_LENGTH = 500;
+const SEARCH_CACHE_TTL_MS = 2 * 60_000;
+const SEARCH_CACHE_MAX_ENTRIES = 100;
+const SEARCH_CACHE_MAX_BYTES = 4 * 1024 * 1024;
 declare const normalizedQueryBrand: unique symbol;
 
 export type NormalizedQuery = string & { readonly [normalizedQueryBrand]: true };
@@ -12,6 +16,13 @@ export interface SearxResult {
   content?: string;
 }
 
+const searchCache = new TtlLruCache<string, SearxResult[]>({
+  maxEntries: SEARCH_CACHE_MAX_ENTRIES,
+  maxWeight: SEARCH_CACHE_MAX_BYTES,
+  ttlMs: SEARCH_CACHE_TTL_MS,
+  weigh: (results) => JSON.stringify(results).length * 2,
+});
+
 export async function searchSearxng(normalizedQuery: NormalizedQuery): Promise<SearxResult[]> {
   const url = createSearchUrl();
   url.searchParams.set("q", normalizedQuery);
@@ -19,6 +30,10 @@ export async function searchSearxng(normalizedQuery: NormalizedQuery): Promise<S
   url.searchParams.set("safesearch", "1");
   url.searchParams.set("language", "all");
 
+  return searchCache.getOrLoad(url.toString(), () => fetchSearchResults(url));
+}
+
+async function fetchSearchResults(url: URL): Promise<SearxResult[]> {
   const res = await globalThis.fetch(url.toString(), {
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),

@@ -21,6 +21,8 @@ Long text is read in bounded chunks. Call the same URL again with the returned `
 }
 ```
 
+Successful fetches are cached in memory for five minutes so offset reads normally use the same extracted document. Search results are cached for two minutes to avoid repeating identical SearXNG work during an agent run. Both caches are bounded, coalesce concurrent duplicate requests, and may be discarded at any time; tool correctness never depends on them.
+
 ## Requirements
 
 - Node.js 20.18.1 or newer
@@ -86,6 +88,7 @@ codex mcp add web-basics -- node /absolute/path/to/web-basics-mcp/build/index.js
 - Each redirect is validated independently.
 - Requests use timeouts, bounded retries, response-size limits, and a stable user agent.
 - Standard responses and images are capped at 5 MiB; PDFs are capped at 15 MiB.
+- Fetch caching respects `Cache-Control: no-store`, `no-cache`, and `max-age=0`.
 
 This server intentionally does not provide browser automation, JavaScript rendering, crawling, authentication, cookies, proxy/VPN routing, or answer synthesis.
 

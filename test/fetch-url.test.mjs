@@ -1,6 +1,68 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fetchUrlContent, responseAllowsCaching } from "../build/content/fetch.js";
 import { formatFetchedContent, formatFetchedPayload } from "../build/tools/fetch-url.js";
+
+test("caches fetched content under the requested and final URLs", async () => {
+  let calls = 0;
+  const load = async () => {
+    calls += 1;
+    return {
+      finalUrl: "https://example.com/cache-final",
+      result: {
+        title: "Cached",
+        content: "stable content",
+        wordCount: 2,
+        contentType: "text/plain",
+        extractor: "text",
+      },
+    };
+  };
+
+  const first = await fetchUrlContent("https://example.com/cache-start#first", load);
+  const second = await fetchUrlContent("https://example.com/cache-start#second", load);
+  const redirected = await fetchUrlContent("https://example.com/cache-final", load);
+
+  assert.equal(calls, 1);
+  assert.equal(first, second);
+  assert.equal(first, redirected);
+});
+
+test("honors response cache-control directives", () => {
+  assert.equal(responseAllowsCaching(new Response("content")), true);
+  assert.equal(responseAllowsCaching(responseWithCacheControl("public, max-age=60")), true);
+  assert.equal(responseAllowsCaching(responseWithCacheControl("no-store")), false);
+  assert.equal(responseAllowsCaching(responseWithCacheControl("public, no-cache")), false);
+  assert.equal(responseAllowsCaching(responseWithCacheControl("max-age = 0")), false);
+});
+
+test("does not retain fetch results marked uncacheable", async () => {
+  let calls = 0;
+  const load = async () => {
+    calls += 1;
+    return {
+      cacheable: false,
+      finalUrl: "https://example.com/no-store",
+      result: {
+        title: "Uncacheable",
+        content: `request ${calls}`,
+        wordCount: 2,
+        contentType: "text/plain",
+        extractor: "text",
+      },
+    };
+  };
+
+  const first = await fetchUrlContent("https://example.com/no-store", load);
+  const second = await fetchUrlContent("https://example.com/no-store", load);
+
+  assert.equal(calls, 2);
+  assert.notEqual(first.result.content, second.result.content);
+});
+
+function responseWithCacheControl(cacheControl) {
+  return new Response("content", { headers: { "cache-control": cacheControl } });
+}
 
 test("formats image fetch results as metadata and MCP image content", () => {
   const imageBytes = Uint8Array.from([1, 2, 3, 4]);

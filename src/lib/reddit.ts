@@ -7,15 +7,11 @@ const MAX_REDDIT_RSS_BYTES = 5 * 1024 * 1024;
 const REDDIT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0";
 const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com"]);
-const CACHE_TTL_MS = 60_000;
-const MAX_CACHE_ENTRIES = 100;
 
 type RedditFetchOptions = Pick<
   FetchPublicHttpOptions,
   "fetchImpl" | "lookupHost" | "retryDelayMs" | "wait"
 >;
-
-const postCache = new Map<string, { expiresAt: number; result: RedditFetchResult }>();
 
 interface RedditPostUrl {
   canonicalUrl: string;
@@ -51,12 +47,6 @@ export interface RedditFetchResult {
 
 export async function fetchRedditPost(url: string, options: RedditFetchOptions = {}): Promise<RedditFetchResult> {
   const postUrl = requireRedditPostUrl(url);
-  pruneExpiredCache();
-
-  const cached = postCache.get(postUrl.canonicalUrl);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.result;
-  }
 
   const parser = new Parser();
 
@@ -95,16 +85,12 @@ export async function fetchRedditPost(url: string, options: RedditFetchOptions =
     content: (item.contentSnippet || "").trim(),
   }));
 
-  const result = {
+  return {
     url: postUrl.canonicalUrl,
     subreddit: subreddit || postUrl.subreddit,
     post,
     comments,
   };
-
-  postCache.set(postUrl.canonicalUrl, { expiresAt: Date.now() + CACHE_TTL_MS, result });
-  trimCache();
-  return result;
 }
 
 export function isRedditUrl(rawUrl: string): boolean {
@@ -179,19 +165,4 @@ function cleanContent(text?: string): string {
 
 function stripRssSuffix(value: string): string {
   return value.replace(/\.rss$/i, "");
-}
-
-function pruneExpiredCache(): void {
-  const now = Date.now();
-  for (const [key, value] of postCache) {
-    if (value.expiresAt <= now) postCache.delete(key);
-  }
-}
-
-function trimCache(): void {
-  while (postCache.size > MAX_CACHE_ENTRIES) {
-    const oldestKey = postCache.keys().next().value;
-    if (!oldestKey) return;
-    postCache.delete(oldestKey);
-  }
 }

@@ -55,6 +55,8 @@ Tests use Node's built-in test runner and live in `test/`. Prefer focused behavi
 
 - Keep returned content bounded. Long `fetch_url` results are continued by calling the same URL with the returned `next_start_index`.
 
+- Keep caches transparent and disposable. Fetches use a five-minute, 64 MiB in-memory cache; searches use a two-minute, 4 MiB in-memory cache. Neither tool may require a cache hit for correctness, and failures must not be cached.
+
 - Runtime configuration loads from the package-root `.env` file. Do not make config depend on the MCP client's working directory.
 
 - Do not add proxy/VPN routing. The only service configuration is `SEARXNG_URL`, which points at an existing SearXNG deployment.
