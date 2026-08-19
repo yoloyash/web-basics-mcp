@@ -4,7 +4,7 @@ Release Please owns versions, changelog entries, tags, and GitHub Releases. The 
 
 ## Normal Release
 
-1. Merge changes into `main`.
+1. Squash-merge changes into `main` using a Conventional Commit PR title so Release Please produces one changelog entry per PR.
 2. Review the Release Please PR's version and changelog.
 3. Merge that PR to create the tag and GitHub Release and publish to npm.
 4. Verify the published package:
