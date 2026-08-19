@@ -52,6 +52,8 @@ Fetches one public HTTP(S) URL.
 
 Supports readable web pages, PDFs, direct text formats, Reddit posts, and PNG, JPEG, WebP, or GIF images. When text is truncated, call the tool again with `next_start_index`.
 
+Reddit posts use public old Reddit HTML for the rendered post and comments, with RSS as a fallback. Successful responses are cached by post ID for up to one hour while respecting stricter upstream cache directives.
+
 Both tools expose MCP output schemas and return structured content alongside text content.
 
 ## Safety And Scope

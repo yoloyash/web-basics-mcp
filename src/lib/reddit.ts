@@ -4,8 +4,9 @@ import { fetchPublicHttpUrl, readBytesCapped, type FetchPublicHttpOptions } from
 
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_REDDIT_RSS_BYTES = 5 * 1024 * 1024;
-const REDDIT_USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 mcp-web-basics/1.0";
+export const REDDIT_CACHE_TTL_MS = 60 * 60_000;
+export const REDDIT_USER_AGENT =
+  "web-basics/0.1 (+https://github.com/yoloyash/web-basics-mcp)";
 const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com"]);
 
 type RedditFetchOptions = Pick<
@@ -13,8 +14,9 @@ type RedditFetchOptions = Pick<
   "fetchImpl" | "lookupHost" | "retryDelayMs" | "signal" | "wait"
 >;
 
-interface RedditPostUrl {
+export interface RedditPostUrl {
   canonicalUrl: string;
+  oldRedditUrl: string;
   rssUrl: string;
   subreddit: string;
   postId: string;
@@ -39,6 +41,8 @@ export interface RedditComment {
 }
 
 export interface RedditFetchResult {
+  cacheable?: boolean;
+  cacheTtlMs?: number;
   url: string;
   subreddit: string;
   post: RedditPost;
@@ -90,6 +94,7 @@ export async function fetchRedditPost(url: string, options: RedditFetchOptions =
   }));
 
   return {
+    ...redditResponseCachePolicy(res),
     url: postUrl.canonicalUrl,
     subreddit: subreddit || postUrl.subreddit,
     post,
@@ -106,7 +111,36 @@ export function isRedditUrl(rawUrl: string): boolean {
   }
 }
 
-function requireRedditPostUrl(rawUrl: string): RedditPostUrl {
+export function redditPostCacheKey(rawUrl: string): string {
+  return `reddit-post:${requireRedditPostUrl(rawUrl).postId.toLowerCase()}`;
+}
+
+export function redditResponseCachePolicy(res: Response): {
+  cacheable: boolean;
+  cacheTtlMs: number;
+} {
+  const directives = (res.headers.get("cache-control") ?? "")
+    .toLowerCase()
+    .split(",")
+    .map((directive) => directive.trim());
+  const cacheable = !directives.some(
+    (directive) =>
+      directive === "no-cache" ||
+      directive === "no-store" ||
+      /^max-age\s*=\s*0$/u.test(directive),
+  );
+  const maxAge = directives
+    .map((directive) => directive.match(/^max-age\s*=\s*(\d+)$/u))
+    .find((match) => match !== null);
+  const upstreamTtlMs = maxAge ? Number(maxAge[1]) * 1000 : REDDIT_CACHE_TTL_MS;
+
+  return {
+    cacheable,
+    cacheTtlMs: Math.min(upstreamTtlMs, REDDIT_CACHE_TTL_MS),
+  };
+}
+
+export function requireRedditPostUrl(rawUrl: string): RedditPostUrl {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -152,6 +186,7 @@ function parseRedditPostPath(pathname: string): RedditPostUrl | undefined {
   const canonicalUrl = `https://www.reddit.com/r/${subreddit}/comments/${postId}/${slug ? `${slug}/` : ""}`;
   return {
     canonicalUrl,
+    oldRedditUrl: canonicalUrl.replace("https://www.reddit.com/", "https://old.reddit.com/"),
     rssUrl: `${canonicalUrl}.rss`,
     subreddit,
     postId,

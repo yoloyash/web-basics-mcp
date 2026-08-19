@@ -13,6 +13,17 @@ test("expires entries without extending TTL on reads", () => {
   assert.equal(cache.get("key"), undefined);
 });
 
+test("supports a per-entry TTL override", () => {
+  let now = 0;
+  const cache = new TtlLruCache({ maxEntries: 2, now: () => now, ttlMs: 10 });
+
+  cache.set("key", "value", 50);
+  now = 10;
+  assert.equal(cache.get("key"), "value");
+  now = 50;
+  assert.equal(cache.get("key"), undefined);
+});
+
 test("evicts the least recently used entry", () => {
   const cache = new TtlLruCache({ maxEntries: 2, ttlMs: 1000 });
 
@@ -60,6 +71,22 @@ test("coalesces concurrent loads", async () => {
   finishLoad("value");
 
   assert.deepEqual(await Promise.all([first, second]), ["value", "value"]);
+});
+
+test("derives a per-entry TTL from a loaded value", async () => {
+  let now = 0;
+  let calls = 0;
+  const cache = new TtlLruCache({ maxEntries: 2, now: () => now, ttlMs: 10 });
+  const load = async () => {
+    calls += 1;
+    return { ttlMs: 50, value: calls };
+  };
+
+  await cache.getOrLoad("key", load, undefined, undefined, (value) => value.ttlMs);
+  now = 10;
+  assert.equal((await cache.getOrLoad("key", load)).value, 1);
+  now = 50;
+  assert.equal((await cache.getOrLoad("key", load)).value, 2);
 });
 
 test("cancels one waiter without aborting a shared load", async () => {

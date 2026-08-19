@@ -29,6 +29,7 @@ Keep MCP adapters thin. Shared behavior belongs in `src/api.ts`, `src/lib/`, or 
 - Route all outbound fetches through `src/lib/http.ts`. Preserve checks for protocols, credentials, private hosts, DNS results, redirects, content types, and response sizes.
 - Keep HTML extraction offline after fetch: Defuddle first, then the gated Readability fallback.
 - Keep caches optional and disposable. Never cache failures or make correctness depend on a cache hit.
+- For Reddit post URLs, fetch public old Reddit HTML first and use RSS only as a fallback. Cache successful results by canonical post ID for at most one hour, honor stricter upstream cache directives, and do not require credentials.
 - Load runtime configuration from the package-root `.env`, not the MCP client's working directory.
 - `SEARXNG_URL` points to user-managed search infrastructure. Do not add bundled search, proxy/VPN routing, browser automation, or answer synthesis.
 

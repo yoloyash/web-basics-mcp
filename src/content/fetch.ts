@@ -5,7 +5,7 @@ import {
 } from "./index.js";
 import { fetchRedditContent } from "./reddit.js";
 import { TtlLruCache } from "../lib/cache.js";
-import { isRedditUrl } from "../lib/reddit.js";
+import { isRedditUrl, redditPostCacheKey } from "../lib/reddit.js";
 import { fetchPublicHttpUrl, readBytesCapped } from "../lib/http.js";
 
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
@@ -16,6 +16,7 @@ const FETCH_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
 export interface FetchedUrlContent {
   cacheable?: boolean;
+  cacheTtlMs?: number;
   finalUrl: string;
   result: ExtractedContent;
 }
@@ -44,12 +45,13 @@ export async function fetchUrlContent(
       const value = await fetchContent(url, loadSignal);
       const finalKey = normalizeCacheUrl(value.finalUrl);
       if (value.cacheable !== false && finalKey !== key) {
-        fetchCache.set(finalKey, value);
+        fetchCache.set(finalKey, value, value.cacheTtlMs);
       }
       return value;
     },
     (value) => value.cacheable !== false,
     signal,
+    (value) => value.cacheTtlMs,
   );
   return fetched;
 }
@@ -59,7 +61,7 @@ async function fetchUrlContentUncached(
   signal?: AbortSignal,
 ): Promise<FetchedUrlContent> {
   if (isRedditUrl(url)) {
-    return fetchRedditContent(url, signal);
+    return fetchRedditContent(url, { signal });
   }
 
   const { res, finalUrl } = await fetchPublicHttpUrl(url, { signal });
@@ -80,6 +82,10 @@ async function fetchUrlContentUncached(
 }
 
 function normalizeCacheUrl(rawUrl: string): string {
+  if (isRedditUrl(rawUrl)) {
+    return redditPostCacheKey(rawUrl);
+  }
+
   try {
     const url = new URL(rawUrl);
     url.hash = "";

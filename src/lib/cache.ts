@@ -56,7 +56,8 @@ export class TtlLruCache<Key, Value> {
     return entry.value;
   }
 
-  set(key: Key, value: Value): void {
+  set(key: Key, value: Value, ttlMs = this.#ttlMs): void {
+    if (!Number.isFinite(ttlMs) || ttlMs < 1) return;
     const weight = Math.max(0, this.#weigh(value));
     if (!Number.isFinite(weight) || weight > this.#maxWeight) return;
 
@@ -74,7 +75,7 @@ export class TtlLruCache<Key, Value> {
     }
 
     this.#entries.set(key, {
-      expiresAt: this.#now() + this.#ttlMs,
+      expiresAt: this.#now() + ttlMs,
       value,
       weight,
     });
@@ -86,6 +87,7 @@ export class TtlLruCache<Key, Value> {
     load: (signal: AbortSignal) => Promise<Value>,
     shouldCache: (value: Value) => boolean = () => true,
     signal?: AbortSignal,
+    ttlMs?: (value: Value) => number | undefined,
   ): Promise<Value> {
     signal?.throwIfAborted();
     const cached = this.get(key);
@@ -97,7 +99,7 @@ export class TtlLruCache<Key, Value> {
       let current: InFlightLoad<Value>;
       const promise = load(controller.signal)
         .then((value) => {
-          if (shouldCache(value)) this.set(key, value);
+          if (shouldCache(value)) this.set(key, value, ttlMs?.(value));
           return value;
         })
         .finally(() => {
