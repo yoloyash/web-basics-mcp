@@ -18,7 +18,7 @@
     }
   },
   "bin": {
-    "web-basics": "./build/stdio.js"
+    "web-basics": "build/stdio.js"
   },
   "sideEffects": false,
   "files": [
