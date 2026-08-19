@@ -10,7 +10,7 @@ const REDDIT_HOSTS = new Set(["reddit.com", "www.reddit.com", "old.reddit.com", 
 
 type RedditFetchOptions = Pick<
   FetchPublicHttpOptions,
-  "fetchImpl" | "lookupHost" | "retryDelayMs" | "wait"
+  "fetchImpl" | "lookupHost" | "retryDelayMs" | "signal" | "wait"
 >;
 
 interface RedditPostUrl {
@@ -58,8 +58,12 @@ export async function fetchRedditPost(url: string, options: RedditFetchOptions =
     userAgent: REDDIT_USER_AGENT,
   });
 
-  const xml = new TextDecoder("utf-8", { fatal: false }).decode(await readBytesCapped(res, MAX_REDDIT_RSS_BYTES));
+  const xml = new TextDecoder("utf-8", { fatal: false }).decode(
+    await readBytesCapped(res, MAX_REDDIT_RSS_BYTES, options.signal),
+  );
+  options.signal?.throwIfAborted();
   const feed = await parser.parseString(xml);
+  options.signal?.throwIfAborted();
   if (!feed.items || feed.items.length === 0) {
     throw validationError("No items found in the RSS feed. Make sure the URL is a valid Reddit post.");
   }

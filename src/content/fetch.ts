@@ -20,7 +20,10 @@ export interface FetchedUrlContent {
   result: ExtractedContent;
 }
 
-type FetchContent = (url: string) => Promise<FetchedUrlContent>;
+type FetchContent = (
+  url: string,
+  signal?: AbortSignal,
+) => Promise<FetchedUrlContent>;
 
 const fetchCache = new TtlLruCache<string, FetchedUrlContent>({
   maxEntries: FETCH_CACHE_MAX_ENTRIES,
@@ -32,12 +35,13 @@ const fetchCache = new TtlLruCache<string, FetchedUrlContent>({
 export async function fetchUrlContent(
   url: string,
   fetchContent: FetchContent = fetchUrlContentUncached,
+  signal?: AbortSignal,
 ): Promise<FetchedUrlContent> {
   const key = normalizeCacheUrl(url);
   const fetched = await fetchCache.getOrLoad(
     key,
-    async () => {
-      const value = await fetchContent(url);
+    async (loadSignal) => {
+      const value = await fetchContent(url, loadSignal);
       const finalKey = normalizeCacheUrl(value.finalUrl);
       if (value.cacheable !== false && finalKey !== key) {
         fetchCache.set(finalKey, value);
@@ -45,23 +49,30 @@ export async function fetchUrlContent(
       return value;
     },
     (value) => value.cacheable !== false,
+    signal,
   );
   return fetched;
 }
 
-async function fetchUrlContentUncached(url: string): Promise<FetchedUrlContent> {
+async function fetchUrlContentUncached(
+  url: string,
+  signal?: AbortSignal,
+): Promise<FetchedUrlContent> {
   if (isRedditUrl(url)) {
-    return fetchRedditContent(url);
+    return fetchRedditContent(url, signal);
   }
 
-  const { res, finalUrl } = await fetchPublicHttpUrl(url);
+  const { res, finalUrl } = await fetchPublicHttpUrl(url, { signal });
   const responseContentType = res.headers.get("content-type");
   const body = await readBytesCapped(
     res,
     fetchByteLimitForContentType(responseContentType, MAX_FETCH_BYTES, MAX_PDF_FETCH_BYTES),
+    signal,
   );
 
+  signal?.throwIfAborted();
   const result = await extractFetchedContent(body, finalUrl, responseContentType);
+  signal?.throwIfAborted();
   if (result.extractor === "image" && result.byteLength > MAX_FETCH_BYTES) {
     throw new Error("Body too large");
   }

@@ -23,20 +23,29 @@ const searchCache = new TtlLruCache<string, SearxResult[]>({
   weigh: (results) => JSON.stringify(results).length * 2,
 });
 
-export async function searchSearxng(normalizedQuery: NormalizedQuery): Promise<SearxResult[]> {
-  const url = createSearchUrl();
+export async function searchSearxng(
+  normalizedQuery: NormalizedQuery,
+  searxngUrl: string,
+  signal?: AbortSignal,
+): Promise<SearxResult[]> {
+  const url = createSearchUrl(searxngUrl);
   url.searchParams.set("q", normalizedQuery);
   url.searchParams.set("format", "json");
   url.searchParams.set("safesearch", "1");
   url.searchParams.set("language", "all");
 
-  return searchCache.getOrLoad(url.toString(), () => fetchSearchResults(url));
+  return searchCache.getOrLoad(
+    url.toString(),
+    (loadSignal) => fetchSearchResults(url, loadSignal),
+    undefined,
+    signal,
+  );
 }
 
-async function fetchSearchResults(url: URL): Promise<SearxResult[]> {
+async function fetchSearchResults(url: URL, signal: AbortSignal): Promise<SearxResult[]> {
   const res = await globalThis.fetch(url.toString(), {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)]),
   });
   if (!res.ok) throw new Error(`HTTP status ${res.status} from SearXNG`);
 
@@ -51,10 +60,10 @@ export function normalizeQuery(input: string): NormalizedQuery {
   return query as NormalizedQuery;
 }
 
-function createSearchUrl(): URL {
+function createSearchUrl(searxngUrl: string): URL {
   try {
-    return new URL("/search", process.env.SEARXNG_URL ?? "http://127.0.0.1:8088");
+    return new URL("/search", searxngUrl);
   } catch {
-    throw validationError("SEARXNG_URL must be a valid URL");
+    throw validationError("searxngUrl must be a valid URL");
   }
 }

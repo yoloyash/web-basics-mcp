@@ -1,11 +1,22 @@
-#!/usr/bin/env node
-import { loadEnv } from "./lib/env.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createServer } from "./server.js";
-
-loadEnv();
-
-const server = createServer();
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error("web-basics-mcp running...");
+export {
+  DEFAULT_MAX_LENGTH,
+  DEFAULT_SEARCH_LIMIT,
+  DEFAULT_SEARXNG_URL,
+  MAX_LENGTH,
+  MAX_SEARCH_LIMIT,
+  createSearxngSearchProvider,
+  createWebBasics,
+  fetchUrl,
+  webSearch,
+} from "./api.js";
+export type {
+  FetchImageResult,
+  FetchTextResult,
+  FetchUrlInput,
+  FetchUrlResult,
+  SearchProvider,
+  SearchResult,
+  WebBasics,
+  WebBasicsOptions,
+  WebSearchInput,
+} from "./api.js";
