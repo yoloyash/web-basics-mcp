@@ -1,70 +1,52 @@
-# Repository Guidelines
+# Repository Instructions
 
-`web-basics-mcp` is a simple MCP server that gives agents basic web tools without API keys. Keep it easy to run, easy to inspect, and boring in the best Node/npm sense.
+`web-basics` is a small Node.js package and stdio MCP server. Its public surface is intentionally limited to web search and safe URL fetching.
 
-## Project Layout
+## Architecture
 
 ```text
-.
-|-- src/
-|   |-- index.ts      # stdio entrypoint
-|   |-- server.ts     # MCP server factory
-|   |-- tools/        # thin register* tool adapters
-|   |   |-- index.ts
-|   |   |-- fetch-url.ts
-|   |   `-- web-search.ts
-|   |-- lib/          # shared HTTP, search, Reddit, env, and error helpers
-|   `-- content/      # HTML, PDF, image, Reddit, and fetch routing
-|-- test/             # Node test runner tests and fixtures
-`-- build/            # compiled output
+src/
+|-- index.ts       # public package exports
+|-- api.ts         # core API and types
+|-- stdio.ts       # executable entrypoint
+|-- server.ts      # MCP server factory
+|-- tools/         # MCP adapters
+|-- lib/           # HTTP, search, cache, env, and error helpers
+`-- content/       # HTML, PDF, image, Reddit, and text extraction
+
+test/               # Node test runner tests and fixtures
+docs/               # maintainer runbooks
+build/              # generated package output
 ```
 
-Keep this structure shallow. Tool files should register MCP tools and delegate real behavior to `src/lib/` or `src/content/`.
+Keep MCP adapters thin. Shared behavior belongs in `src/api.ts`, `src/lib/`, or `src/content/`.
 
-## Commands
+## Contracts And Boundaries
 
-- `npm install`: install dependencies.
-- `npm run build`: compile TypeScript to `build/`.
-- `npm run start`: run the compiled MCP server.
-- `npm run dev`: watch TypeScript during development.
-- `npm test`: build and run the test suite.
-- `npm pack --dry-run`: check package contents and runtime build output.
-- `SEARXNG_URL=http://... node ...`: point an explicit live smoke test at an existing SearXNG instance. Keep normal tests offline.
+- Preserve the `web_search` and `fetch_url` tool names and result shapes unless a contract change is intentional.
+- `web_search` accepts `query` and `limit`. `fetch_url` accepts `url`, `start_index`, and `max_length`.
+- Keep results bounded. Continue long text with `next_start_index`.
+- Route all outbound fetches through `src/lib/http.ts`. Preserve checks for protocols, credentials, private hosts, DNS results, redirects, content types, and response sizes.
+- Keep HTML extraction offline after fetch: Defuddle first, then the gated Readability fallback.
+- Keep caches optional and disposable. Never cache failures or make correctness depend on a cache hit.
+- Load runtime configuration from the package-root `.env`, not the MCP client's working directory.
+- `SEARXNG_URL` points to user-managed search infrastructure. Do not add bundled search, proxy/VPN routing, browser automation, or answer synthesis.
 
-Run `npm test` before handing off code changes. Use `npm pack --dry-run` for package or publish-facing changes.
+## Code Style
 
-## Coding Style
+- Use strict TypeScript and ES modules with explicit `.js` extensions for local imports.
+- Use two-space indentation, double quotes, semicolons, and kebab-case file names.
+- Keep MCP tool names snake_case and tool registration functions as default-exported `register*` functions.
 
-Use strict TypeScript and ES modules. Local imports need explicit `.js` extensions because the project uses Node16 module resolution. Follow the existing style: two-space indentation, double quotes, and semicolons.
+## Verification
 
-Keep file names kebab-case. MCP tool names are snake_case, such as `fetch_url`. Keep adapters small and default-exported as `register*` functions.
+- Run `npm test` for code changes.
+- Run `npm pack --dry-run` for package, export, executable, or publishing changes.
+- Keep normal tests offline. Live search checks must use an explicitly supplied `SEARXNG_URL`.
+- Add focused tests for validation, network safety, response shapes, extraction, and error paths.
 
-Do not choose the "easy" hacky fix just because it is fast. Prefer standard, conventional TypeScript and Node practices, even for small changes.
+## Changes And Releases
 
-## Tests
+Use conventional commits and focused PRs. Include the behavior changed, verification performed, and any configuration impact in the PR description.
 
-Tests use Node's built-in test runner and live in `test/`. Prefer focused behavior tests for validation, network safety, response shape, extraction, and error paths. Avoid public-internet tests unless they are clearly marked as integration tests.
-
-## Security And Behavior
-
-- Preserve `fetch_url` protections for pages, PDFs, images, and Reddit: protocols, credentials, private hostnames, DNS results, redirects, content types, and response size. Reddit post URLs also use the public-address DNS check.
-
-- HTML extraction is Defuddle-first with `useAsync: false`, followed by a gated Mozilla Readability fallback. Do not allow extractors to make network requests outside `src/lib/http.ts`.
-
-- Preserve the intentionally small single-input contracts: `web_search` accepts one `query`; `fetch_url` accepts one `url` plus `start_index` and `max_length`.
-
-- Keep returned content bounded. Long `fetch_url` results are continued by calling the same URL with the returned `next_start_index`.
-
-- Keep caches transparent and disposable. Fetches use a five-minute, 64 MiB in-memory cache; searches use a two-minute, 4 MiB in-memory cache. Neither tool may require a cache hit for correctness, and failures must not be cached.
-
-- Runtime configuration loads from the package-root `.env` file. Do not make config depend on the MCP client's working directory.
-
-- Do not add proxy/VPN routing. The only service configuration is `SEARXNG_URL`, which points at an existing SearXNG deployment.
-
-- Use `SEARXNG_URL` for search backend configuration. Keep returned content bounded and leave answer synthesis to the client/model rather than hiding it inside the server.
-
-## Branches, Commits And PRs
-
-- Keep changes easy to review and easy to promote back to `main` when they are stable.
-- For parallel feature work, branch from `dev` so PRs stay independent.
-- Use conventional commit messages. Keep commits focused and describe the user-visible change. PRs should include a concise summary, verification steps, and any configuration changes.
+For publishing, follow [`docs/releases.md`](docs/releases.md).

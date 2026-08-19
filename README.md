@@ -1,19 +1,15 @@
 # web-basics
 
-Small web search and URL fetching primitives for agents. Use them as a Node.js API or run them as a local MCP server.
+A local MCP server for web search and safe URL fetching. It runs over stdio, needs no third-party API key, and leaves answer synthesis to the client.
 
-## Tools
+## Requirements
 
-- `web_search` searches one query through an existing SearXNG instance and returns `{link, title, snippet}` results.
-- `fetch_url` fetches one public URL and returns readable Markdown, PDF text, direct text data, or a supported image.
+- Node.js 20.18.1 or newer
+- A SearXNG instance with JSON responses enabled for `web_search`
 
-Long text is returned in bounded chunks. Continue reading by calling `fetch_url` again with the returned `next_start_index`.
+`fetch_url` works without SearXNG.
 
-## Run with MCP
-
-Requires Node.js 20.18.1 or newer and an existing SearXNG instance with JSON responses enabled.
-
-For Codex:
+## Add To Codex
 
 ```bash
 codex mcp add web-basics \
@@ -21,7 +17,7 @@ codex mcp add web-basics \
   -- npx -y @yoloyash/web-basics
 ```
 
-For another stdio-compatible MCP client:
+For another stdio MCP client:
 
 ```json
 {
@@ -33,45 +29,43 @@ For another stdio-compatible MCP client:
 }
 ```
 
-`fetch_url` works without SearXNG. If `SEARXNG_URL` is omitted, `web_search` uses `http://127.0.0.1:8088`.
+`SEARXNG_URL` defaults to `http://127.0.0.1:8088`.
 
-## Use as a library
+## Tools
 
-```bash
-npm install @yoloyash/web-basics
-```
+### `web_search`
 
-```ts
-import { createWebBasics } from "@yoloyash/web-basics";
+Searches the configured SearXNG instance.
 
-const web = createWebBasics({
-  searxngUrl: "http://127.0.0.1:8088",
-});
+- `query`: search query
+- `limit`: optional result count from 1 to 10; defaults to 5
 
-const results = await web.webSearch({ query: "Model Context Protocol" });
-const page = await web.fetchUrl({ url: "https://modelcontextprotocol.io" });
-```
+Returns results with `link`, `title`, and `snippet`.
 
-Both methods accept an optional `AbortSignal`. The API also accepts a custom `SearchProvider`, so another search backend can be added without changing callers or the MCP tools.
+### `fetch_url`
 
-## Behavior
+Fetches one public HTTP(S) URL.
 
-- `web_search` accepts `query` and an optional `limit` from 1 to 10.
-- `fetch_url` accepts `url`, `start_index`, and `max_length`; text responses include continuation metadata.
-- Both MCP tools declare an `outputSchema` and return `structuredContent` alongside compatible text content.
-- HTML extraction uses Defuddle first with a gated Mozilla Readability fallback.
-- PDFs, direct text formats, PNG/JPEG/WebP/GIF images, and Reddit post URLs are supported.
-- Successful fetches and searches use bounded, disposable in-memory caches.
-- URLs are restricted to public HTTP(S) destinations. Credentials, private hosts, unsafe DNS results, and unsafe redirects are rejected.
+- `url`: URL to fetch
+- `start_index`: optional character offset; defaults to 0
+- `max_length`: optional character limit from 1 to 20,000; defaults to 8,000
 
-This package intentionally does not provide browser automation, JavaScript rendering, crawling, authentication, proxy routing, bundled search infrastructure, or answer synthesis.
+Supports readable web pages, PDFs, direct text formats, Reddit posts, and PNG, JPEG, WebP, or GIF images. When text is truncated, call the tool again with `next_start_index`.
+
+Both tools expose MCP output schemas and return structured content alongside text content.
+
+## Safety And Scope
+
+Requests are limited to public HTTP(S) destinations. The server rejects credentials, private hosts, unsafe DNS results, unsafe redirects, unsupported content types, and oversized responses.
+
+This package does not provide JavaScript rendering, browser automation, crawling, authentication, proxy routing, bundled search infrastructure, or answer synthesis.
 
 ## Development
 
 ```bash
-npm install
+npm ci
 npm test
 npm pack --dry-run
 ```
 
-Normal tests are offline. For a live search smoke test, set `SEARXNG_URL` to an existing SearXNG deployment.
+Normal tests do not access the public internet. Set `SEARXNG_URL` explicitly for a live search smoke test.
