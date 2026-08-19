@@ -1,21 +1,88 @@
-import { fetchRedditPost, type RedditComment, type RedditFetchResult } from "../lib/reddit.js";
+import { extractHtmlMarkdown, type HtmlCandidate } from "./html.js";
+import {
+  fetchRedditPost,
+  redditResponseCachePolicy,
+  REDDIT_USER_AGENT,
+  requireRedditPostUrl,
+  type RedditComment,
+  type RedditFetchResult,
+} from "../lib/reddit.js";
+import {
+  fetchPublicHttpUrl,
+  readBytesCapped,
+  type FetchPublicHttpOptions,
+} from "../lib/http.js";
+
+const FETCH_TIMEOUT_MS = 15000;
+const MAX_REDDIT_HTML_BYTES = 5 * 1024 * 1024;
+
+type RedditContentOptions = Pick<
+  FetchPublicHttpOptions,
+  "fetchImpl" | "lookupHost" | "retryDelayMs" | "signal" | "wait"
+> & {
+  extractHtml?: (
+    html: string,
+    finalUrl: string,
+  ) => Promise<HtmlCandidate & { fallbackReason?: string }>;
+};
 
 export interface RedditMarkdown {
   title: string;
   content: string;
   wordCount: number;
   extractor: "reddit";
+  fallbackReason?: string;
 }
 
 export async function fetchRedditContent(
   url: string,
-  signal?: AbortSignal,
-): Promise<{ finalUrl: string; result: RedditMarkdown & { contentType: string } }> {
-  const redditPost = await fetchRedditPost(url, { signal });
-  signal?.throwIfAborted();
+  options: RedditContentOptions = {},
+): Promise<{
+  cacheable?: boolean;
+  cacheTtlMs?: number;
+  finalUrl: string;
+  result: RedditMarkdown & { contentType: string };
+}> {
+  const postUrl = requireRedditPostUrl(url);
+
+  try {
+    const { res, finalUrl } = await fetchPublicHttpUrl(postUrl.oldRedditUrl, {
+      ...options,
+      headers: { Accept: "text/html, application/xhtml+xml" },
+      maxTransientRetries: 0,
+      timeoutMs: FETCH_TIMEOUT_MS,
+      userAgent: REDDIT_USER_AGENT,
+    });
+    const html = new TextDecoder("utf-8", { fatal: false }).decode(
+      await readBytesCapped(res, MAX_REDDIT_HTML_BYTES, options.signal),
+    );
+    options.signal?.throwIfAborted();
+    const extracted = await (options.extractHtml ?? extractHtmlMarkdown)(html, finalUrl);
+    options.signal?.throwIfAborted();
+
+    return {
+      ...redditResponseCachePolicy(res),
+      finalUrl: postUrl.canonicalUrl,
+      result: {
+        title: extracted.title,
+        content: extracted.content,
+        wordCount: extracted.wordCount,
+        contentType: res.headers.get("content-type")?.split(";")[0]?.trim() || "text/html",
+        extractor: "reddit",
+        fallbackReason: extracted.fallbackReason,
+      },
+    };
+  } catch {
+    options.signal?.throwIfAborted();
+  }
+
+  const redditPost = await fetchRedditPost(url, options);
+  options.signal?.throwIfAborted();
   const content = formatRedditMarkdown(redditPost);
 
   return {
+    cacheable: redditPost.cacheable,
+    cacheTtlMs: redditPost.cacheTtlMs,
     finalUrl: redditPost.url,
     result: {
       title: redditPost.post.title || redditPost.url,

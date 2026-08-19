@@ -29,6 +29,36 @@ test("caches fetched content under the requested and final URLs", async () => {
   assert.equal(first, redirected);
 });
 
+test("caches Reddit URL variants under their canonical post ID", async () => {
+  let calls = 0;
+  const load = async () => {
+    calls += 1;
+    return {
+      cacheTtlMs: 60 * 60_000,
+      finalUrl: "https://www.reddit.com/r/example/comments/cache123/canonical-title/",
+      result: {
+        title: "Cached Reddit post",
+        content: "stable Reddit content",
+        wordCount: 3,
+        contentType: "text/html",
+        extractor: "reddit",
+      },
+    };
+  };
+
+  const first = await fetchUrlContent(
+    "https://old.reddit.com/r/example/comments/CACHE123/old-title/?utm_source=test#comments",
+    load,
+  );
+  const second = await fetchUrlContent(
+    "https://www.reddit.com/r/example/comments/cache123/different-title/",
+    load,
+  );
+
+  assert.equal(calls, 1);
+  assert.equal(first, second);
+});
+
 test("honors response cache-control directives", () => {
   assert.equal(responseAllowsCaching(new Response("content")), true);
   assert.equal(responseAllowsCaching(responseWithCacheControl("public, max-age=60")), true);
