@@ -26,10 +26,11 @@ export interface FetchPublicHttpOptions {
   lookupHost?: LookupHost;
   maxTransientRetries?: number;
   retryDelayMs?: number;
+  signal?: AbortSignal;
   timeoutMs?: number;
   userAgent?: string;
   validatePublicAddress?: boolean;
-  wait?: (ms: number) => Promise<void>;
+  wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 interface FetchConfig {
@@ -38,10 +39,11 @@ interface FetchConfig {
   lookupHost: LookupHost;
   maxTransientRetries: number;
   retryDelayMs: number;
+  signal?: AbortSignal;
   timeoutMs: number;
   userAgent: string;
   validatePublicAddress: boolean;
-  wait: (ms: number) => Promise<void>;
+  wait: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 export class HttpStatusError extends Error {
@@ -72,7 +74,12 @@ async function fetchPublicHttpUrlWithRedirects(
   config: FetchConfig,
   redirects: number,
 ): Promise<{ res: Response; finalUrl: string }> {
-  const url = await validatePublicHttpUrl(rawUrl, config.lookupHost, config.validatePublicAddress);
+  const url = await validatePublicHttpUrl(
+    rawUrl,
+    config.lookupHost,
+    config.validatePublicAddress,
+    config.signal,
+  );
 
   for (let attempt = 0; attempt <= config.maxTransientRetries; attempt += 1) {
     let res: Response;
@@ -80,11 +87,12 @@ async function fetchPublicHttpUrlWithRedirects(
       res = await config.fetchImpl(url.toString(), {
         headers: requestHeaders(config),
         redirect: "manual",
-        signal: AbortSignal.timeout(config.timeoutMs),
+        signal: requestSignal(config),
       });
     } catch (err) {
+      config.signal?.throwIfAborted();
       if (!shouldRetryFetchError(err, attempt, config.maxTransientRetries)) throw err;
-      await config.wait(config.retryDelayMs);
+      await config.wait(config.retryDelayMs, config.signal);
       continue;
     }
 
@@ -97,7 +105,7 @@ async function fetchPublicHttpUrlWithRedirects(
 
     if (!res.ok) {
       if (isRetryableHttpStatus(res.status) && attempt < config.maxTransientRetries) {
-        await config.wait(config.retryDelayMs);
+        await config.wait(config.retryDelayMs, config.signal);
         continue;
       }
       throw new HttpStatusError(res.status);
@@ -109,7 +117,12 @@ async function fetchPublicHttpUrlWithRedirects(
   throw new Error("Failed to fetch URL");
 }
 
-export async function readBytesCapped(res: Response, maxBytes: number): Promise<Uint8Array> {
+export async function readBytesCapped(
+  res: Response,
+  maxBytes: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  signal?.throwIfAborted();
   const declaredLength = Number(res.headers.get("content-length") ?? 0);
   if (declaredLength > maxBytes) throw new Error("Body too large");
   if (!res.body) return new Uint8Array();
@@ -119,6 +132,10 @@ export async function readBytesCapped(res: Response, maxBytes: number): Promise<
   let total = 0;
 
   while (true) {
+    if (signal?.aborted) {
+      await reader.cancel(signal.reason);
+      signal.throwIfAborted();
+    }
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
@@ -145,6 +162,7 @@ function normalizeFetchOptions(options: FetchPublicHttpOptions): FetchConfig {
     lookupHost: options.lookupHost ?? lookupHost,
     maxTransientRetries: options.maxTransientRetries ?? MAX_TRANSIENT_RETRIES,
     retryDelayMs: options.retryDelayMs ?? RETRY_DELAY_MS,
+    signal: options.signal,
     timeoutMs: options.timeoutMs ?? FETCH_TIMEOUT_MS,
     userAgent: options.userAgent?.trim() || DEFAULT_USER_AGENT,
     validatePublicAddress: options.validatePublicAddress ?? true,
@@ -157,12 +175,32 @@ function requestHeaders(config: FetchConfig): Record<string, string> {
   return { "User-Agent": config.userAgent, ...headers };
 }
 
+function requestSignal(config: FetchConfig): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(config.timeoutMs);
+  return config.signal
+    ? AbortSignal.any([config.signal, timeoutSignal])
+    : timeoutSignal;
+}
+
 async function lookupHost(hostname: string): Promise<LookupAddress[]> {
   return lookup(hostname, { all: true, verbatim: true });
 }
 
-async function wait(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+async function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    signal?.throwIfAborted();
+    const timeout = setTimeout(finish, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason);
+    };
+    function finish() {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function shouldRetryFetchError(err: unknown, attempt: number, maxTransientRetries: number): boolean {
@@ -185,7 +223,9 @@ async function validatePublicHttpUrl(
   rawUrl: string,
   lookupAddresses: LookupHost,
   validatePublicAddress: boolean,
+  signal?: AbortSignal,
 ): Promise<URL> {
+  signal?.throwIfAborted();
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -208,6 +248,7 @@ async function validatePublicHttpUrl(
   if (!validatePublicAddress) return url;
 
   const records = await lookupAddresses(hostname).catch(() => []);
+  signal?.throwIfAborted();
   if (records.length === 0) {
     throw validationError("DNS resolution failed");
   }

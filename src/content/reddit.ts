@@ -7,8 +7,12 @@ export interface RedditMarkdown {
   extractor: "reddit";
 }
 
-export async function fetchRedditContent(url: string): Promise<{ finalUrl: string; result: RedditMarkdown & { contentType: string } }> {
-  const redditPost = await fetchRedditPost(url);
+export async function fetchRedditContent(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{ finalUrl: string; result: RedditMarkdown & { contentType: string } }> {
+  const redditPost = await fetchRedditPost(url, { signal });
+  signal?.throwIfAborted();
   const content = formatRedditMarkdown(redditPost);
 
   return {

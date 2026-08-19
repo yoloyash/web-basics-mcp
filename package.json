@@ -1,14 +1,26 @@
 {
-  "name": "web-basics-mcp",
-  "version": "1.0.0",
-  "description": "Basic MCP tools for web search and content fetching",
+  "name": "@yoloyash/web-basics",
+  "version": "0.1.0",
+  "description": "Web search and URL fetching API with an MCP server",
   "license": "MIT",
   "author": "Yash Khurana",
   "type": "module",
-  "bin": {
-    "web-basics-mcp": "./build/index.js"
-  },
   "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    },
+    "./mcp": {
+      "types": "./build/server.d.ts",
+      "import": "./build/server.js"
+    }
+  },
+  "bin": {
+    "web-basics": "./build/stdio.js"
+  },
+  "sideEffects": false,
   "files": [
     "build",
     "README.md",
@@ -23,6 +35,9 @@
     "url": "https://github.com/yoloyash/web-basics-mcp/issues"
   },
   "homepage": "https://github.com/yoloyash/web-basics-mcp#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "mcp",
     "searxng",
@@ -36,7 +51,7 @@
   "scripts": {
     "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('build', { recursive: true, force: true });\"",
     "build": "npm run clean && tsc",
-    "start": "node build/index.js",
+    "start": "node build/stdio.js",
     "dev": "tsc --watch --preserveWatchOutput",
     "test": "npm run build && node --test test/*.test.mjs",
     "prepack": "npm run build"

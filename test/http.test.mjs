@@ -165,6 +165,37 @@ test("does not fetch private hostnames", async () => {
   assert.equal(calls, 0);
 });
 
+test("forwards caller cancellation to the active request", async () => {
+  const controller = new AbortController();
+  let seenSignal;
+  let markRequestStarted;
+  const requestStarted = new Promise((resolve) => {
+    markRequestStarted = resolve;
+  });
+  const pending = fetchPublicHttpUrl("https://example.com/page", {
+    fetchImpl: async (_url, init) => {
+      seenSignal = init.signal;
+      markRequestStarted();
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener(
+          "abort",
+          () => reject(init.signal.reason),
+          { once: true },
+        );
+      });
+    },
+    lookupHost: publicLookup,
+    signal: controller.signal,
+    wait: noWait,
+  });
+
+  await requestStarted;
+  controller.abort();
+
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.equal(seenSignal.aborted, true);
+});
+
 test("marks oversized bodies as non-retryable", async () => {
   await assert.rejects(
     () => readBytesCapped(new Response("too large", { headers: { "content-length": "9" } }), 5),

@@ -4,6 +4,13 @@ interface CacheEntry<Value> {
   weight: number;
 }
 
+interface InFlightLoad<Value> {
+  controller: AbortController;
+  promise: Promise<Value>;
+  settled: boolean;
+  waiters: number;
+}
+
 export interface TtlLruCacheOptions<Value> {
   maxEntries: number;
   maxWeight?: number;
@@ -14,7 +21,7 @@ export interface TtlLruCacheOptions<Value> {
 
 export class TtlLruCache<Key, Value> {
   readonly #entries = new Map<Key, CacheEntry<Value>>();
-  readonly #inFlight = new Map<Key, Promise<Value>>();
+  readonly #inFlight = new Map<Key, InFlightLoad<Value>>();
   readonly #maxEntries: number;
   readonly #maxWeight: number;
   readonly #now: () => number;
@@ -76,26 +83,38 @@ export class TtlLruCache<Key, Value> {
 
   async getOrLoad(
     key: Key,
-    load: () => Promise<Value>,
+    load: (signal: AbortSignal) => Promise<Value>,
     shouldCache: (value: Value) => boolean = () => true,
+    signal?: AbortSignal,
   ): Promise<Value> {
+    signal?.throwIfAborted();
     const cached = this.get(key);
     if (cached !== undefined) return cached;
 
-    const pending = this.#inFlight.get(key);
-    if (pending) return pending;
+    let pending = this.#inFlight.get(key);
+    if (!pending) {
+      const controller = new AbortController();
+      let current: InFlightLoad<Value>;
+      const promise = load(controller.signal)
+        .then((value) => {
+          if (shouldCache(value)) this.set(key, value);
+          return value;
+        })
+        .finally(() => {
+          current.settled = true;
+          if (this.#inFlight.get(key) === current) this.#inFlight.delete(key);
+        });
+      current = {
+        controller,
+        promise,
+        settled: false,
+        waiters: 0,
+      };
+      this.#inFlight.set(key, current);
+      pending = current;
+    }
 
-    const promise = load()
-      .then((value) => {
-        if (shouldCache(value)) this.set(key, value);
-        return value;
-      })
-      .finally(() => {
-        if (this.#inFlight.get(key) === promise) this.#inFlight.delete(key);
-      });
-
-    this.#inFlight.set(key, promise);
-    return promise;
+    return waitForLoad(pending, signal);
   }
 
   clear(): void {
@@ -114,4 +133,43 @@ export class TtlLruCache<Key, Value> {
       if (entry.expiresAt <= now) this.#delete(key, entry);
     }
   }
+}
+
+function waitForLoad<Value>(
+  pending: InFlightLoad<Value>,
+  signal?: AbortSignal,
+): Promise<Value> {
+  pending.waiters += 1;
+
+  if (!signal) {
+    return pending.promise.finally(() => releaseWaiter(pending));
+  }
+
+  return new Promise<Value>((resolve, reject) => {
+    let finished = false;
+
+    const finish = (callback: () => void) => {
+      if (finished) return;
+      finished = true;
+      signal.removeEventListener("abort", onAbort);
+      releaseWaiter(pending);
+      callback();
+    };
+    const onAbort = () => finish(() => reject(signal.reason));
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    pending.promise.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
+function releaseWaiter<Value>(pending: InFlightLoad<Value>): void {
+  pending.waiters -= 1;
+  if (pending.waiters === 0 && !pending.settled) pending.controller.abort();
 }

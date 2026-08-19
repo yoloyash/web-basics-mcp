@@ -62,6 +62,46 @@ test("coalesces concurrent loads", async () => {
   assert.deepEqual(await Promise.all([first, second]), ["value", "value"]);
 });
 
+test("cancels one waiter without aborting a shared load", async () => {
+  const cache = new TtlLruCache({ maxEntries: 2, ttlMs: 1000 });
+  const firstController = new AbortController();
+  let finishLoad;
+  let loadSignal;
+  const load = (signal) => {
+    loadSignal = signal;
+    return new Promise((resolve) => {
+      finishLoad = resolve;
+    });
+  };
+
+  const first = cache.getOrLoad("key", load, undefined, firstController.signal);
+  const second = cache.getOrLoad("key", load);
+  firstController.abort();
+
+  await assert.rejects(first, { name: "AbortError" });
+  assert.equal(loadSignal.aborted, false);
+  finishLoad("value");
+  assert.equal(await second, "value");
+});
+
+test("aborts an in-flight load when every waiter cancels", async () => {
+  const cache = new TtlLruCache({ maxEntries: 2, ttlMs: 1000 });
+  const controller = new AbortController();
+  let loadSignal;
+  const load = (signal) => {
+    loadSignal = signal;
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  };
+
+  const pending = cache.getOrLoad("key", load, undefined, controller.signal);
+  controller.abort();
+
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.equal(loadSignal.aborted, true);
+});
+
 test("does not cache failures or values rejected by policy", async () => {
   const cache = new TtlLruCache({ maxEntries: 2, ttlMs: 1000 });
   let failureCalls = 0;
