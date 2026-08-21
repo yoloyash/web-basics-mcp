@@ -6,7 +6,7 @@ import { validationError } from "./errors.js";
 export const DEFAULT_USER_AGENT = "mcp-web-basics/1.0";
 
 const FETCH_TIMEOUT_MS = 10000;
-const MAX_REDIRECTS = 5;
+const DEFAULT_MAX_REDIRECTS = 5;
 const MAX_TRANSIENT_RETRIES = 1;
 const RETRY_DELAY_MS = 250;
 const TIMEOUT_NAMES = new Set(["AbortError", "TimeoutError"]);
@@ -24,8 +24,10 @@ export interface FetchPublicHttpOptions {
   fetchImpl?: FetchLike;
   headers?: Record<string, string>;
   lookupHost?: LookupHost;
+  maxRedirects?: number;
   maxTransientRetries?: number;
   retryDelayMs?: number;
+  retryDelayForResponse?: (response: Response, attempt: number) => number;
   signal?: AbortSignal;
   timeoutMs?: number;
   userAgent?: string;
@@ -37,8 +39,10 @@ interface FetchConfig {
   fetchImpl: FetchLike;
   headers: Record<string, string>;
   lookupHost: LookupHost;
+  maxRedirects: number;
   maxTransientRetries: number;
   retryDelayMs: number;
+  retryDelayForResponse?: (response: Response, attempt: number) => number;
   signal?: AbortSignal;
   timeoutMs: number;
   userAgent: string;
@@ -97,7 +101,7 @@ async function fetchPublicHttpUrlWithRedirects(
     }
 
     if (res.status >= 300 && res.status < 400) {
-      if (redirects >= MAX_REDIRECTS) throw new Error("Too many redirects");
+      if (redirects >= config.maxRedirects) throw new Error("Too many redirects");
       const location = res.headers.get("location");
       if (!location) throw new Error("Redirect missing location");
       return fetchPublicHttpUrlWithRedirects(new URL(location, url).toString(), config, redirects + 1);
@@ -105,7 +109,8 @@ async function fetchPublicHttpUrlWithRedirects(
 
     if (!res.ok) {
       if (isRetryableHttpStatus(res.status) && attempt < config.maxTransientRetries) {
-        await config.wait(config.retryDelayMs, config.signal);
+        const delayMs = config.retryDelayForResponse?.(res, attempt) ?? config.retryDelayMs;
+        await config.wait(delayMs, config.signal);
         continue;
       }
       throw new HttpStatusError(res.status);
@@ -160,8 +165,10 @@ function normalizeFetchOptions(options: FetchPublicHttpOptions): FetchConfig {
     fetchImpl: options.fetchImpl ?? globalThis.fetch,
     headers: options.headers ?? {},
     lookupHost: options.lookupHost ?? lookupHost,
+    maxRedirects: options.maxRedirects ?? DEFAULT_MAX_REDIRECTS,
     maxTransientRetries: options.maxTransientRetries ?? MAX_TRANSIENT_RETRIES,
     retryDelayMs: options.retryDelayMs ?? RETRY_DELAY_MS,
+    retryDelayForResponse: options.retryDelayForResponse,
     signal: options.signal,
     timeoutMs: options.timeoutMs ?? FETCH_TIMEOUT_MS,
     userAgent: options.userAgent?.trim() || DEFAULT_USER_AGENT,
