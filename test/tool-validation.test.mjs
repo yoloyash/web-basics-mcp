@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { after, before, test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 let client;
 let searchServer;
+const { version: packageVersion } = createRequire(import.meta.url)("../package.json");
 
 before(async () => {
   searchServer = createServer((_req, res) => {
@@ -30,6 +32,7 @@ before(async () => {
     args: ["build/stdio.js"],
     env: {
       ...stringEnvironment(process.env),
+      SEARCH_PROVIDER: "searxng",
       SEARXNG_URL: `http://127.0.0.1:${address.port}`,
     },
   });
@@ -76,6 +79,10 @@ test("registers only the two basic web tools", async () => {
     "url",
   ]);
   assert.deepEqual(Object.keys(searchTool.inputSchema.properties).sort(), ["limit", "query"]);
+});
+
+test("reports the installed package version through MCP", () => {
+  assert.equal(client.getServerVersion()?.version, packageVersion);
 });
 
 test("web_search rejects blank queries before calling SearXNG", async () => {

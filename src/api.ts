@@ -1,5 +1,6 @@
 import { fetchUrlContent } from "./content/fetch.js";
 import type { ExtractedContent } from "./content/index.js";
+import { createBraveSearchProvider } from "./lib/brave-search.js";
 import { validationError } from "./lib/errors.js";
 import {
   normalizeQuery,
@@ -12,6 +13,7 @@ export const MAX_LENGTH = 20000;
 export const DEFAULT_SEARCH_LIMIT = 5;
 export const MAX_SEARCH_LIMIT = 10;
 export const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8088";
+export type SearchBackend = "brave" | "searxng";
 
 export interface WebSearchInput {
   query: string;
@@ -73,19 +75,23 @@ export interface WebBasics {
 }
 
 export interface WebBasicsOptions {
+  braveApiKey?: string;
+  searchBackend?: SearchBackend;
   searchProvider?: SearchProvider;
   searxngUrl?: string;
 }
 
 export function createWebBasics(options: WebBasicsOptions = {}): WebBasics {
   const searchProvider =
-    options.searchProvider ?? createSearxngSearchProvider(options.searxngUrl);
+    options.searchProvider ?? createConfiguredSearchProvider(options);
 
   return {
     webSearch: (input) => webSearch(input, searchProvider),
     fetchUrl,
   };
 }
+
+export { createBraveSearchProvider };
 
 export function createSearxngSearchProvider(
   searxngUrl = DEFAULT_SEARXNG_URL,
@@ -102,6 +108,17 @@ export function createSearxngSearchProvider(
       snippet: result.content ?? "",
     }));
   };
+}
+
+function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvider {
+  const backend = options.searchBackend ?? "searxng";
+  if (backend === "brave") {
+    return createBraveSearchProvider(options.braveApiKey ?? "");
+  }
+  if (backend === "searxng") {
+    return createSearxngSearchProvider(options.searxngUrl);
+  }
+  throw validationError(`Unsupported search backend: ${String(backend)}`);
 }
 
 export async function webSearch(

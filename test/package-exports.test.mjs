@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  createBraveSearchProvider,
   createWebBasics,
   fetchUrl,
   webSearch,
@@ -8,6 +9,7 @@ import {
 import { createMcpServer } from "@yoloyash/web-basics/mcp";
 
 test("exports a side-effect-free API and MCP server factory", () => {
+  assert.equal(typeof createBraveSearchProvider, "function");
   assert.equal(typeof createWebBasics, "function");
   assert.equal(typeof webSearch, "function");
   assert.equal(typeof fetchUrl, "function");
