@@ -42,6 +42,26 @@ test("sends additional configured headers", async () => {
   assert.deepEqual(Object.keys(seenHeaders), ["User-Agent", "Accept"]);
 });
 
+test("sends POST request bodies", async () => {
+  let seenRequest;
+  await fetchPublicHttpUrl("https://example.com/search", {
+    body: "query=typescript",
+    fetchImpl: async (_url, init) => {
+      seenRequest = init;
+      return new Response("ok");
+    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    lookupHost: publicLookup,
+    maxRedirects: 0,
+    method: "POST",
+    wait: noWait,
+  });
+
+  assert.equal(seenRequest.method, "POST");
+  assert.equal(seenRequest.body, "query=typescript");
+  assert.equal(seenRequest.redirect, "manual");
+});
+
 test("retries one transient HTTP status before succeeding", async () => {
   const statuses = [503, 200];
   let calls = 0;

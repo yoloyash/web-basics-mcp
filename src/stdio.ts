@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createWebBasics, type SearchBackend } from "./api.js";
-import { loadEnv } from "./lib/env.js";
+import { loadEnv, parseBooleanEnv } from "./lib/env.js";
 import { createMcpServer } from "./server.js";
 
 loadEnv();
 
 const searchBackend = configuredSearchBackend(process.env.SEARCH_PROVIDER);
 const webBasics = createWebBasics({
+  allowKeylessFallback: parseBooleanEnv(
+    "SEARCH_ALLOW_KEYLESS_FALLBACK",
+    process.env.SEARCH_ALLOW_KEYLESS_FALLBACK,
+  ),
   braveApiKey: process.env.BRAVE_SEARCH_API_KEY,
   searchBackend,
   searxngUrl: process.env.SEARXNG_URL,
@@ -19,8 +23,17 @@ console.error("web-basics running...");
 
 function configuredSearchBackend(value: string | undefined): SearchBackend {
   const backend = value?.trim().toLowerCase() || "searxng";
-  if (backend !== "brave" && backend !== "searxng") {
-    throw new Error("SEARCH_PROVIDER must be either brave or searxng");
+  if (
+    backend !== "auto" &&
+    backend !== "brave" &&
+    backend !== "duckduckgo" &&
+    backend !== "exa" &&
+    backend !== "firecrawl" &&
+    backend !== "searxng"
+  ) {
+    throw new Error(
+      "SEARCH_PROVIDER must be auto, brave, searxng, firecrawl, exa, or duckduckgo",
+    );
   }
   return backend;
 }

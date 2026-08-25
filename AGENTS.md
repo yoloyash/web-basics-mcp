@@ -29,10 +29,10 @@ Keep MCP adapters thin. Shared behavior belongs in `src/api.ts`, `src/lib/`, or 
 - Route all outbound fetches through `src/lib/http.ts`. Preserve checks for protocols, credentials, private hosts, DNS results, redirects, content types, and response sizes.
 - Keep HTML extraction offline after fetch: Defuddle first, then the gated Readability fallback.
 - Keep caches optional and disposable. Never cache failures or make correctness depend on a cache hit.
-- Keep the completed-result search cache limited to SearXNG. For Brave Search, coalesce only concurrent identical requests and do not retain completed API responses.
+- Keep the completed-result search cache limited to SearXNG. For Brave Search and keyless providers, coalesce only concurrent identical requests and do not retain completed responses.
 - For Reddit post URLs, fetch public old Reddit HTML first and use RSS only as a fallback. Cache successful results by canonical post ID for at most one hour, honor stricter upstream cache directives, and do not require credentials.
 - Load runtime configuration from the package-root `.env`, not the MCP client's working directory.
-- `SEARCH_PROVIDER` selects `searxng` or `brave`; SearXNG remains the default. `SEARXNG_URL` points to user-managed infrastructure, while Brave uses its fixed official endpoint and `BRAVE_SEARCH_API_KEY`. Do not add bundled search, proxy/VPN routing, browser automation, or answer synthesis.
+- `SEARCH_PROVIDER` selects `auto`, `searxng`, `brave`, `firecrawl`, `exa`, or `duckduckgo`; SearXNG remains the default and explicit selections are terminal. Automatic mode uses configured Brave and SearXNG providers, then adds Firecrawl, Exa, and DuckDuckGo only when `SEARCH_ALLOW_KEYLESS_FALLBACK=true`. `SEARXNG_URL` points to user-managed infrastructure, while Brave uses its fixed official endpoint and `BRAVE_SEARCH_API_KEY`. Do not add bundled search infrastructure, proxy/VPN routing, browser automation, or answer synthesis.
 
 ## Code Style
 
@@ -44,7 +44,7 @@ Keep MCP adapters thin. Shared behavior belongs in `src/api.ts`, `src/lib/`, or 
 
 - Run `npm test` for code changes.
 - Run `npm pack --dry-run` for package, export, executable, or publishing changes.
-- Keep normal tests offline. Live search checks must use an explicitly supplied `SEARXNG_URL` or `BRAVE_SEARCH_API_KEY` for the selected provider.
+- Keep normal tests offline. Live search checks must explicitly select the provider being tested. Supply `SEARXNG_URL` or `BRAVE_SEARCH_API_KEY` when testing those providers; keyless checks must remain opt-in.
 - Add focused tests for validation, network safety, response shapes, extraction, and error paths.
 
 ## Changes And Releases

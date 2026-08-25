@@ -7,12 +7,12 @@ import {
   type FetchPublicHttpOptions,
 } from "./http.js";
 import type { NormalizedQuery } from "./search.js";
+import { normalizeSearchProviderLimit } from "./search-provider.js";
 
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 const BRAVE_API_VERSION = "2023-01-01";
 const BRAVE_MAX_QUERY_LENGTH = 400;
 const BRAVE_MAX_QUERY_WORDS = 50;
-const BRAVE_MAX_RESULTS = 10;
 const BRAVE_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const BRAVE_RETRY_DELAY_MS = 1_000;
 const BRAVE_MAX_RETRY_DELAY_MS = 2_000;
@@ -42,13 +42,15 @@ export function createBraveSearchProvider(
     ttlMs: 1,
   });
 
-  return async (query, signal) => {
+  return async (query, signal, limit) => {
     validateBraveQuery(query);
+    const requestedLimit = normalizeSearchProviderLimit(limit);
     return inFlightSearches.getOrLoad(
-      query,
+      JSON.stringify([query, requestedLimit]),
       (loadSignal) => searchBrave(
         query as NormalizedQuery,
         subscriptionToken,
+        requestedLimit,
         loadSignal,
         dependencies,
       ),
@@ -61,12 +63,13 @@ export function createBraveSearchProvider(
 async function searchBrave(
   query: NormalizedQuery,
   apiKey: string,
+  limit: number,
   signal: AbortSignal,
   dependencies: BraveSearchDependencies,
 ): Promise<SearchResult[]> {
   const url = new URL(BRAVE_SEARCH_URL);
   url.searchParams.set("q", query);
-  url.searchParams.set("count", String(BRAVE_MAX_RESULTS));
+  url.searchParams.set("count", String(limit));
   url.searchParams.set("result_filter", "web");
   url.searchParams.set("safesearch", "moderate");
   url.searchParams.set("text_decorations", "false");

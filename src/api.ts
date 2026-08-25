@@ -1,19 +1,32 @@
 import { fetchUrlContent } from "./content/fetch.js";
 import type { ExtractedContent } from "./content/index.js";
 import { createBraveSearchProvider } from "./lib/brave-search.js";
+import { createDuckDuckGoSearchProvider } from "./lib/duckduckgo-search.js";
 import { validationError } from "./lib/errors.js";
+import { createExaSearchProvider } from "./lib/exa-search.js";
+import { createFirecrawlSearchProvider } from "./lib/firecrawl-search.js";
 import {
   normalizeQuery,
   searchSearxng,
   type NormalizedQuery,
 } from "./lib/search.js";
+import {
+  MAX_PROVIDER_SEARCH_LIMIT,
+  normalizeSearchProviderLimit,
+} from "./lib/search-provider.js";
 
 export const DEFAULT_MAX_LENGTH = 8000;
 export const MAX_LENGTH = 20000;
 export const DEFAULT_SEARCH_LIMIT = 5;
-export const MAX_SEARCH_LIMIT = 10;
+export const MAX_SEARCH_LIMIT = MAX_PROVIDER_SEARCH_LIMIT;
 export const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8088";
-export type SearchBackend = "brave" | "searxng";
+export type SearchBackend =
+  | "auto"
+  | "brave"
+  | "duckduckgo"
+  | "exa"
+  | "firecrawl"
+  | "searxng";
 
 export interface WebSearchInput {
   query: string;
@@ -30,7 +43,13 @@ export interface SearchResult {
 export type SearchProvider = (
   query: string,
   signal?: AbortSignal,
+  limit?: number,
 ) => Promise<SearchResult[]>;
+
+export interface SearchProviderEntry {
+  name: string;
+  search: SearchProvider;
+}
 
 export interface FetchUrlInput {
   url: string;
@@ -75,6 +94,7 @@ export interface WebBasics {
 }
 
 export interface WebBasicsOptions {
+  allowKeylessFallback?: boolean;
   braveApiKey?: string;
   searchBackend?: SearchBackend;
   searchProvider?: SearchProvider;
@@ -91,12 +111,64 @@ export function createWebBasics(options: WebBasicsOptions = {}): WebBasics {
   };
 }
 
-export { createBraveSearchProvider };
+export {
+  createBraveSearchProvider,
+  createDuckDuckGoSearchProvider,
+  createExaSearchProvider,
+  createFirecrawlSearchProvider,
+};
+
+export function createFallbackSearchProvider(
+  providers: readonly SearchProviderEntry[],
+): SearchProvider {
+  if (providers.length === 0) {
+    throw validationError("At least one search provider is required");
+  }
+
+  return async (query, signal, limit) => {
+    const attempts: SearchProviderAttempt[] = [];
+
+    for (const provider of providers) {
+      signal?.throwIfAborted();
+      try {
+        const results = await provider.search(query, signal, limit);
+        signal?.throwIfAborted();
+        if (results.length > 0) return results;
+        attempts.push({ name: provider.name, outcome: "empty" });
+      } catch (error) {
+        signal?.throwIfAborted();
+        attempts.push({ error, name: provider.name, outcome: "failed" });
+      }
+    }
+
+    const failures = attempts.filter(isFailedSearchAttempt);
+    if (failures.length === 0) return [];
+    const allFailed = failures.length === attempts.length;
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `${allFailed ? "All search providers failed" : "No search provider returned results"}: ${attempts
+        .map((attempt) => attempt.outcome === "failed"
+          ? `${attempt.name}: ${errorMessage(attempt.error)}`
+          : `${attempt.name}: returned no results`)
+        .join("; ")}`,
+    );
+  };
+}
+
+type SearchProviderAttempt =
+  | { error: unknown; name: string; outcome: "failed" }
+  | { name: string; outcome: "empty" };
+
+function isFailedSearchAttempt(
+  attempt: SearchProviderAttempt,
+): attempt is Extract<SearchProviderAttempt, { outcome: "failed" }> {
+  return attempt.outcome === "failed";
+}
 
 export function createSearxngSearchProvider(
   searxngUrl = DEFAULT_SEARXNG_URL,
 ): SearchProvider {
-  return async (query, signal) => {
+  return async (query, signal, limit) => {
     const results = await searchSearxng(
       query as NormalizedQuery,
       searxngUrl,
@@ -106,19 +178,55 @@ export function createSearxngSearchProvider(
       link: result.url,
       title: result.title ?? result.url,
       snippet: result.content ?? "",
-    }));
+    })).slice(0, normalizeSearchProviderLimit(limit));
   };
 }
 
 function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvider {
   const backend = options.searchBackend ?? "searxng";
+  if (backend === "auto") {
+    const providers: SearchProviderEntry[] = [];
+    if (options.braveApiKey?.trim()) {
+      providers.push({
+        name: "brave",
+        search: createBraveSearchProvider(options.braveApiKey),
+      });
+    }
+    if (options.searxngUrl?.trim()) {
+      providers.push({
+        name: "searxng",
+        search: createSearxngSearchProvider(options.searxngUrl),
+      });
+    }
+    if (options.allowKeylessFallback) {
+      providers.push(
+        { name: "firecrawl", search: createFirecrawlSearchProvider() },
+        { name: "exa", search: createExaSearchProvider() },
+        { name: "duckduckgo", search: createDuckDuckGoSearchProvider() },
+      );
+    }
+    if (providers.length === 0) {
+      throw validationError(
+        "Automatic search requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled",
+      );
+    }
+    return createFallbackSearchProvider(providers);
+  }
   if (backend === "brave") {
     return createBraveSearchProvider(options.braveApiKey ?? "");
   }
   if (backend === "searxng") {
     return createSearxngSearchProvider(options.searxngUrl);
   }
+  if (backend === "firecrawl") return createFirecrawlSearchProvider();
+  if (backend === "exa") return createExaSearchProvider();
+  if (backend === "duckduckgo") return createDuckDuckGoSearchProvider();
   throw validationError(`Unsupported search backend: ${String(backend)}`);
+}
+
+function errorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/gu, " ").trim().slice(0, 500);
 }
 
 export async function webSearch(
@@ -129,7 +237,7 @@ export async function webSearch(
   const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
   validateIntegerRange(limit, "limit", 1, MAX_SEARCH_LIMIT);
   input.signal?.throwIfAborted();
-  const results = await searchProvider(query, input.signal);
+  const results = await searchProvider(query, input.signal, limit);
   return results.slice(0, limit);
 }
 

@@ -29,7 +29,7 @@ test("maps Brave web results onto the public search contract", async () => {
     lookupHost: publicLookup,
   });
 
-  const results = await provider("brave integration query");
+  const results = await provider("brave integration query", undefined, 2);
 
   assert.deepEqual(results, [
     {
@@ -47,7 +47,7 @@ test("maps Brave web results onto the public search contract", async () => {
   assert.equal(requests[0].url.origin, "https://api.search.brave.com");
   assert.equal(requests[0].url.pathname, "/res/v1/web/search");
   assert.equal(requests[0].url.searchParams.get("q"), "brave integration query");
-  assert.equal(requests[0].url.searchParams.get("count"), "10");
+  assert.equal(requests[0].url.searchParams.get("count"), "2");
   assert.equal(requests[0].url.searchParams.get("result_filter"), "web");
   assert.equal(requests[0].url.searchParams.get("safesearch"), "moderate");
   assert.equal(requests[0].url.searchParams.get("text_decorations"), "false");
