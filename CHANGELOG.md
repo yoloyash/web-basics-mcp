@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.3.0...v0.4.0) (2026-08-25)
+
+
+### Features
+
+* add automatic search fallback and keyless providers ([#21](https://github.com/yoloyash/web-basics-mcp/issues/21)) ([de6a02f](https://github.com/yoloyash/web-basics-mcp/commit/de6a02f14aef3efd487b3e659447602b39c6036b))
+
 ## [0.3.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.2.0...v0.3.0) (2026-08-21)
 
 
