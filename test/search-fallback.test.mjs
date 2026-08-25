@@ -111,8 +111,27 @@ test("rejects an empty provider chain", () => {
   );
 });
 
-test("constructs auto and explicit keyless backends without credentials", () => {
-  for (const searchBackend of ["auto", "firecrawl", "exa", "duckduckgo"]) {
+test("requires configured providers or keyless permission for automatic search", () => {
+  assert.throws(
+    () => createWebBasics({ searchBackend: "auto" }),
+    /requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled/,
+  );
+  assert.doesNotThrow(() => createWebBasics({
+    allowKeylessFallback: true,
+    searchBackend: "auto",
+  }));
+  assert.doesNotThrow(() => createWebBasics({
+    braveApiKey: "test-token",
+    searchBackend: "auto",
+  }));
+  assert.doesNotThrow(() => createWebBasics({
+    searchBackend: "auto",
+    searxngUrl: "https://search.example",
+  }));
+});
+
+test("constructs explicit keyless backends without automatic permission", () => {
+  for (const searchBackend of ["firecrawl", "exa", "duckduckgo"]) {
     assert.doesNotThrow(() => createWebBasics({ searchBackend }));
   }
 });

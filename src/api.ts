@@ -94,6 +94,7 @@ export interface WebBasics {
 }
 
 export interface WebBasicsOptions {
+  allowKeylessFallback?: boolean;
   braveApiKey?: string;
   searchBackend?: SearchBackend;
   searchProvider?: SearchProvider;
@@ -197,11 +198,18 @@ function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvid
         search: createSearxngSearchProvider(options.searxngUrl),
       });
     }
-    providers.push(
-      { name: "firecrawl", search: createFirecrawlSearchProvider() },
-      { name: "exa", search: createExaSearchProvider() },
-      { name: "duckduckgo", search: createDuckDuckGoSearchProvider() },
-    );
+    if (options.allowKeylessFallback) {
+      providers.push(
+        { name: "firecrawl", search: createFirecrawlSearchProvider() },
+        { name: "exa", search: createExaSearchProvider() },
+        { name: "duckduckgo", search: createDuckDuckGoSearchProvider() },
+      );
+    }
+    if (providers.length === 0) {
+      throw validationError(
+        "Automatic search requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled",
+      );
+    }
     return createFallbackSearchProvider(providers);
   }
   if (backend === "brave") {

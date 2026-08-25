@@ -19,6 +19,18 @@ export function loadEnv(options: LoadEnvOptions = {}): void {
   });
 }
 
+export function parseBooleanEnv(
+  name: string,
+  value: string | undefined,
+  defaultValue = false,
+): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return defaultValue;
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
 function defaultPackageRoot(): string {
   return fileURLToPath(new URL("../..", import.meta.url));
 }

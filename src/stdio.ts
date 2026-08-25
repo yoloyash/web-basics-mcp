@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createWebBasics, type SearchBackend } from "./api.js";
-import { loadEnv } from "./lib/env.js";
+import { loadEnv, parseBooleanEnv } from "./lib/env.js";
 import { createMcpServer } from "./server.js";
 
 loadEnv();
 
 const searchBackend = configuredSearchBackend(process.env.SEARCH_PROVIDER);
 const webBasics = createWebBasics({
+  allowKeylessFallback: parseBooleanEnv(
+    "SEARCH_ALLOW_KEYLESS_FALLBACK",
+    process.env.SEARCH_ALLOW_KEYLESS_FALLBACK,
+  ),
   braveApiKey: process.env.BRAVE_SEARCH_API_KEY,
   searchBackend,
   searxngUrl: process.env.SEARXNG_URL,
