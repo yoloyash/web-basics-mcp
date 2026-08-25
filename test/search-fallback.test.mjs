@@ -44,10 +44,22 @@ test("tries providers sequentially until one returns results", async () => {
   assert.deepEqual(calls, ["first", "second", "third"]);
 });
 
-test("returns an empty result when at least one provider completed successfully", async () => {
+test("does not hide provider failures behind an empty result", async () => {
   const provider = createFallbackSearchProvider([
     { name: "failed", search: async () => { throw new Error("offline"); } },
     { name: "empty", search: async () => [] },
+  ]);
+
+  await assert.rejects(
+    () => provider("no matches"),
+    /No search provider returned results: failed: offline; empty: returned no results/,
+  );
+});
+
+test("returns an empty result when every provider completed without results", async () => {
+  const provider = createFallbackSearchProvider([
+    { name: "first", search: async () => [] },
+    { name: "second", search: async () => [] },
   ]);
 
   assert.deepEqual(await provider("no matches"), []);

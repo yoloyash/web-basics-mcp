@@ -120,8 +120,7 @@ export function createFallbackSearchProvider(
   }
 
   return async (query, signal) => {
-    const failures: Array<{ name: string; error: unknown }> = [];
-    let completedWithoutResults = false;
+    const attempts: SearchProviderAttempt[] = [];
 
     for (const provider of providers) {
       signal?.throwIfAborted();
@@ -129,21 +128,35 @@ export function createFallbackSearchProvider(
         const results = await provider.search(query, signal);
         signal?.throwIfAborted();
         if (results.length > 0) return results;
-        completedWithoutResults = true;
+        attempts.push({ name: provider.name, outcome: "empty" });
       } catch (error) {
         signal?.throwIfAborted();
-        failures.push({ name: provider.name, error });
+        attempts.push({ error, name: provider.name, outcome: "failed" });
       }
     }
 
-    if (completedWithoutResults) return [];
+    const failures = attempts.filter(isFailedSearchAttempt);
+    if (failures.length === 0) return [];
+    const allFailed = failures.length === attempts.length;
     throw new AggregateError(
       failures.map((failure) => failure.error),
-      `All search providers failed: ${failures
-        .map((failure) => `${failure.name}: ${errorMessage(failure.error)}`)
+      `${allFailed ? "All search providers failed" : "No search provider returned results"}: ${attempts
+        .map((attempt) => attempt.outcome === "failed"
+          ? `${attempt.name}: ${errorMessage(attempt.error)}`
+          : `${attempt.name}: returned no results`)
         .join("; ")}`,
     );
   };
+}
+
+type SearchProviderAttempt =
+  | { error: unknown; name: string; outcome: "failed" }
+  | { name: string; outcome: "empty" };
+
+function isFailedSearchAttempt(
+  attempt: SearchProviderAttempt,
+): attempt is Extract<SearchProviderAttempt, { outcome: "failed" }> {
+  return attempt.outcome === "failed";
 }
 
 export function createSearxngSearchProvider(
