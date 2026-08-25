@@ -23,7 +23,7 @@ type DuckDuckGoDependencies = Pick<
 export function createDuckDuckGoSearchProvider(
   dependencies: DuckDuckGoDependencies = {},
 ): SearchProvider {
-  return coalesceSearchProvider(async (query, signal) => {
+  return coalesceSearchProvider(async (query, signal, limit) => {
     const form = new URLSearchParams({ b: "", kl: "us-en", q: query });
     const { res } = await fetchPublicHttpUrl(DUCKDUCKGO_HTML_URL, {
       ...dependencies,
@@ -50,7 +50,7 @@ export function createDuckDuckGoSearchProvider(
       throw new Error("DuckDuckGo blocked the request with a bot-detection challenge");
     }
 
-    return normalizeSearchResults(parseDuckDuckGoResults(html));
+    return normalizeSearchResults(parseDuckDuckGoResults(html), limit);
   });
 }
 

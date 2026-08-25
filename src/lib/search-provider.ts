@@ -1,7 +1,10 @@
 import type { SearchProvider, SearchResult } from "../api.js";
 import { TtlLruCache } from "./cache.js";
+import { validationError } from "./errors.js";
 
 const MAX_IN_FLIGHT_SEARCHES = 100;
+const DEFAULT_PROVIDER_SEARCH_LIMIT = 10;
+export const MAX_PROVIDER_SEARCH_LIMIT = 10;
 const MAX_RESULT_URL_LENGTH = 4096;
 const MAX_RESULT_TITLE_LENGTH = 500;
 const MAX_RESULT_SNIPPET_LENGTH = 1000;
@@ -18,17 +21,20 @@ export function coalesceSearchProvider(search: SearchProvider): SearchProvider {
     ttlMs: 1,
   });
 
-  return (query, signal) => searches.getOrLoad(
-    query,
-    (loadSignal) => search(query, loadSignal),
-    () => false,
-    signal,
-  );
+  return (query, signal, limit) => {
+    const requestedLimit = normalizeSearchProviderLimit(limit);
+    return searches.getOrLoad(
+      JSON.stringify([query, requestedLimit]),
+      (loadSignal) => search(query, loadSignal, requestedLimit),
+      () => false,
+      signal,
+    );
+  };
 }
 
 export function normalizeSearchResults(
   candidates: readonly SearchResultCandidate[],
-  limit = 10,
+  limit = DEFAULT_PROVIDER_SEARCH_LIMIT,
 ): SearchResult[] {
   const results: SearchResult[] = [];
   const seen = new Set<string>();
@@ -49,6 +55,17 @@ export function normalizeSearchResults(
   }
 
   return results;
+}
+
+export function normalizeSearchProviderLimit(
+  limit = DEFAULT_PROVIDER_SEARCH_LIMIT,
+): number {
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PROVIDER_SEARCH_LIMIT) {
+    throw validationError(
+      `limit must be an integer between 1 and ${MAX_PROVIDER_SEARCH_LIMIT}`,
+    );
+  }
+  return limit;
 }
 
 function normalizeResultUrl(rawUrl: string): string | undefined {

@@ -30,11 +30,11 @@ interface FirecrawlWebResult {
 export function createFirecrawlSearchProvider(
   dependencies: FirecrawlDependencies = {},
 ): SearchProvider {
-  return coalesceSearchProvider(async (query, signal) => {
+  return coalesceSearchProvider(async (query, signal, limit) => {
     const { res } = await fetchPublicHttpUrl(FIRECRAWL_SEARCH_URL, {
       ...dependencies,
       body: JSON.stringify({
-        limit: 10,
+        limit,
         query,
         sources: [{ type: "web" }],
       }),
@@ -63,7 +63,7 @@ export function createFirecrawlSearchProvider(
       );
     }
 
-    return normalizeSearchResults(firecrawlResults(payload));
+    return normalizeSearchResults(firecrawlResults(payload), limit);
   });
 }
 

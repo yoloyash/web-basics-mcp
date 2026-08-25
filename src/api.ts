@@ -10,11 +10,15 @@ import {
   searchSearxng,
   type NormalizedQuery,
 } from "./lib/search.js";
+import {
+  MAX_PROVIDER_SEARCH_LIMIT,
+  normalizeSearchProviderLimit,
+} from "./lib/search-provider.js";
 
 export const DEFAULT_MAX_LENGTH = 8000;
 export const MAX_LENGTH = 20000;
 export const DEFAULT_SEARCH_LIMIT = 5;
-export const MAX_SEARCH_LIMIT = 10;
+export const MAX_SEARCH_LIMIT = MAX_PROVIDER_SEARCH_LIMIT;
 export const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8088";
 export type SearchBackend =
   | "auto"
@@ -39,6 +43,7 @@ export interface SearchResult {
 export type SearchProvider = (
   query: string,
   signal?: AbortSignal,
+  limit?: number,
 ) => Promise<SearchResult[]>;
 
 export interface SearchProviderEntry {
@@ -119,13 +124,13 @@ export function createFallbackSearchProvider(
     throw validationError("At least one search provider is required");
   }
 
-  return async (query, signal) => {
+  return async (query, signal, limit) => {
     const attempts: SearchProviderAttempt[] = [];
 
     for (const provider of providers) {
       signal?.throwIfAborted();
       try {
-        const results = await provider.search(query, signal);
+        const results = await provider.search(query, signal, limit);
         signal?.throwIfAborted();
         if (results.length > 0) return results;
         attempts.push({ name: provider.name, outcome: "empty" });
@@ -162,7 +167,7 @@ function isFailedSearchAttempt(
 export function createSearxngSearchProvider(
   searxngUrl = DEFAULT_SEARXNG_URL,
 ): SearchProvider {
-  return async (query, signal) => {
+  return async (query, signal, limit) => {
     const results = await searchSearxng(
       query as NormalizedQuery,
       searxngUrl,
@@ -172,7 +177,7 @@ export function createSearxngSearchProvider(
       link: result.url,
       title: result.title ?? result.url,
       snippet: result.content ?? "",
-    }));
+    })).slice(0, normalizeSearchProviderLimit(limit));
   };
 }
 
@@ -224,7 +229,7 @@ export async function webSearch(
   const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
   validateIntegerRange(limit, "limit", 1, MAX_SEARCH_LIMIT);
   input.signal?.throwIfAborted();
-  const results = await searchProvider(query, input.signal);
+  const results = await searchProvider(query, input.signal, limit);
   return results.slice(0, limit);
 }
 

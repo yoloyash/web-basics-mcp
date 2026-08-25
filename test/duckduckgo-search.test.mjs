@@ -17,13 +17,17 @@ test("parses DuckDuckGo no-JavaScript HTML results", async () => {
             </a>
             <a class="result__snippet">A useful <b>snippet</b>.</a>
           </div>
+          <div class="result">
+            <a class="result__a" href="https://example.com/second">Second result</a>
+            <a class="result__snippet">Second snippet.</a>
+          </div>
         </body></html>
       `);
     },
     lookupHost: publicLookup,
   });
 
-  assert.deepEqual(await provider("duckduckgo query"), [{
+  assert.deepEqual(await provider("duckduckgo query", undefined, 1), [{
     link: "https://example.com/result",
     title: "Example result",
     snippet: "A useful snippet.",

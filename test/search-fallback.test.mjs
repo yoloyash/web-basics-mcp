@@ -10,38 +10,38 @@ test("tries providers sequentially until one returns results", async () => {
   const provider = createFallbackSearchProvider([
     {
       name: "first",
-      search: async () => {
-        calls.push("first");
+      search: async (_query, _signal, limit) => {
+        calls.push(["first", limit]);
         throw new Error("unavailable");
       },
     },
     {
       name: "second",
-      search: async () => {
-        calls.push("second");
+      search: async (_query, _signal, limit) => {
+        calls.push(["second", limit]);
         return [];
       },
     },
     {
       name: "third",
-      search: async () => {
-        calls.push("third");
+      search: async (_query, _signal, limit) => {
+        calls.push(["third", limit]);
         return [{ link: "https://example.com/", title: "Example", snippet: "Result" }];
       },
     },
     {
       name: "unused",
       search: async () => {
-        calls.push("unused");
+        calls.push(["unused", undefined]);
         return [];
       },
     },
   ]);
 
-  assert.deepEqual(await provider("fallback query"), [
+  assert.deepEqual(await provider("fallback query", undefined, 2), [
     { link: "https://example.com/", title: "Example", snippet: "Result" },
   ]);
-  assert.deepEqual(calls, ["first", "second", "third"]);
+  assert.deepEqual(calls, [["first", 2], ["second", 2], ["third", 2]]);
 });
 
 test("does not hide provider failures behind an empty result", async () => {

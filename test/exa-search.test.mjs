@@ -36,7 +36,7 @@ test("maps anonymous Exa MCP text results onto the public contract", async () =>
     lookupHost: publicLookup,
   });
 
-  assert.deepEqual(await provider("exa query"), [
+  assert.deepEqual(await provider("exa query", undefined, 4), [
     {
       link: "https://example.com/first",
       title: "First result",
@@ -52,7 +52,7 @@ test("maps anonymous Exa MCP text results onto the public contract", async () =>
   assert.equal(request.url.searchParams.get("tools"), "web_search_exa");
   assert.equal(request.init.headers["x-exa-source"], "web-basics");
   assert.deepEqual(JSON.parse(request.init.body).params, {
-    arguments: { numResults: 10, query: "exa query" },
+    arguments: { numResults: 4, query: "exa query" },
     name: "web_search_exa",
   });
 });

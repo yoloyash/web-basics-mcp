@@ -39,10 +39,12 @@ test("caches identical SearXNG searches", async () => {
 
 test("webSearch normalizes, limits, and formats results", async () => {
   const seenQueries = [];
+  const seenLimits = [];
   const results = await webSearch(
     { query: " typescript ", limit: 1 },
-    async (query) => {
+    async (query, _signal, limit) => {
       seenQueries.push(query);
+      seenLimits.push(limit);
       return [
         { link: "https://example.com/a", title: "A", snippet: "Alpha" },
         { link: "https://example.com/b", title: "B", snippet: "Beta" },
@@ -51,6 +53,7 @@ test("webSearch normalizes, limits, and formats results", async () => {
   );
 
   assert.deepEqual(seenQueries, ["typescript"]);
+  assert.deepEqual(seenLimits, [1]);
   assert.deepEqual(results, [
     { link: "https://example.com/a", title: "A", snippet: "Alpha" },
   ]);

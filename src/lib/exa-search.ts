@@ -22,7 +22,7 @@ type ExaDependencies = Pick<
 export function createExaSearchProvider(
   dependencies: ExaDependencies = {},
 ): SearchProvider {
-  return coalesceSearchProvider(async (query, signal) => {
+  return coalesceSearchProvider(async (query, signal, limit) => {
     const { res } = await fetchPublicHttpUrl(EXA_MCP_URL, {
       ...dependencies,
       body: JSON.stringify({
@@ -30,7 +30,7 @@ export function createExaSearchProvider(
         jsonrpc: "2.0",
         method: "tools/call",
         params: {
-          arguments: { numResults: 10, query },
+          arguments: { numResults: limit, query },
           name: "web_search_exa",
         },
       }),
@@ -73,7 +73,7 @@ export function createExaSearchProvider(
       throw new Error(extractErrorText(response.result) ?? "Exa MCP search failed");
     }
 
-    return normalizeSearchResults(extractExaCandidates(response.result));
+    return normalizeSearchResults(extractExaCandidates(response.result), limit);
   });
 }
 
