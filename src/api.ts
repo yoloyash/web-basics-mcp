@@ -1,7 +1,10 @@
 import { fetchUrlContent } from "./content/fetch.js";
 import type { ExtractedContent } from "./content/index.js";
 import { createBraveSearchProvider } from "./lib/brave-search.js";
+import { createDuckDuckGoSearchProvider } from "./lib/duckduckgo-search.js";
 import { validationError } from "./lib/errors.js";
+import { createExaSearchProvider } from "./lib/exa-search.js";
+import { createFirecrawlSearchProvider } from "./lib/firecrawl-search.js";
 import {
   normalizeQuery,
   searchSearxng,
@@ -13,7 +16,13 @@ export const MAX_LENGTH = 20000;
 export const DEFAULT_SEARCH_LIMIT = 5;
 export const MAX_SEARCH_LIMIT = 10;
 export const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8088";
-export type SearchBackend = "auto" | "brave" | "searxng";
+export type SearchBackend =
+  | "auto"
+  | "brave"
+  | "duckduckgo"
+  | "exa"
+  | "firecrawl"
+  | "searxng";
 
 export interface WebSearchInput {
   query: string;
@@ -96,7 +105,12 @@ export function createWebBasics(options: WebBasicsOptions = {}): WebBasics {
   };
 }
 
-export { createBraveSearchProvider };
+export {
+  createBraveSearchProvider,
+  createDuckDuckGoSearchProvider,
+  createExaSearchProvider,
+  createFirecrawlSearchProvider,
+};
 
 export function createFallbackSearchProvider(
   providers: readonly SearchProviderEntry[],
@@ -165,6 +179,11 @@ function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvid
         search: createSearxngSearchProvider(options.searxngUrl),
       });
     }
+    providers.push(
+      { name: "firecrawl", search: createFirecrawlSearchProvider() },
+      { name: "exa", search: createExaSearchProvider() },
+      { name: "duckduckgo", search: createDuckDuckGoSearchProvider() },
+    );
     return createFallbackSearchProvider(providers);
   }
   if (backend === "brave") {
@@ -173,11 +192,15 @@ function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvid
   if (backend === "searxng") {
     return createSearxngSearchProvider(options.searxngUrl);
   }
+  if (backend === "firecrawl") return createFirecrawlSearchProvider();
+  if (backend === "exa") return createExaSearchProvider();
+  if (backend === "duckduckgo") return createDuckDuckGoSearchProvider();
   throw validationError(`Unsupported search backend: ${String(backend)}`);
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/gu, " ").trim().slice(0, 500);
 }
 
 export async function webSearch(
