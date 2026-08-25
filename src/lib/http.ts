@@ -21,11 +21,13 @@ type FetchLike = typeof globalThis.fetch;
 type LookupHost = (hostname: string) => Promise<LookupAddress[]>;
 
 export interface FetchPublicHttpOptions {
+  body?: string;
   fetchImpl?: FetchLike;
   headers?: Record<string, string>;
   lookupHost?: LookupHost;
   maxRedirects?: number;
   maxTransientRetries?: number;
+  method?: "GET" | "POST";
   retryDelayMs?: number;
   retryDelayForResponse?: (response: Response, attempt: number) => number;
   signal?: AbortSignal;
@@ -36,11 +38,13 @@ export interface FetchPublicHttpOptions {
 }
 
 interface FetchConfig {
+  body?: string;
   fetchImpl: FetchLike;
   headers: Record<string, string>;
   lookupHost: LookupHost;
   maxRedirects: number;
   maxTransientRetries: number;
+  method: "GET" | "POST";
   retryDelayMs: number;
   retryDelayForResponse?: (response: Response, attempt: number) => number;
   signal?: AbortSignal;
@@ -89,7 +93,9 @@ async function fetchPublicHttpUrlWithRedirects(
     let res: Response;
     try {
       res = await config.fetchImpl(url.toString(), {
+        body: config.body,
         headers: requestHeaders(config),
+        method: config.method,
         redirect: "manual",
         signal: requestSignal(config),
       });
@@ -162,11 +168,13 @@ export async function readBytesCapped(
 
 function normalizeFetchOptions(options: FetchPublicHttpOptions): FetchConfig {
   return {
+    body: options.body,
     fetchImpl: options.fetchImpl ?? globalThis.fetch,
     headers: options.headers ?? {},
     lookupHost: options.lookupHost ?? lookupHost,
     maxRedirects: options.maxRedirects ?? DEFAULT_MAX_REDIRECTS,
     maxTransientRetries: options.maxTransientRetries ?? MAX_TRANSIENT_RETRIES,
+    method: options.method ?? "GET",
     retryDelayMs: options.retryDelayMs ?? RETRY_DELAY_MS,
     retryDelayForResponse: options.retryDelayForResponse,
     signal: options.signal,

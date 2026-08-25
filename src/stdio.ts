@@ -19,8 +19,8 @@ console.error("web-basics running...");
 
 function configuredSearchBackend(value: string | undefined): SearchBackend {
   const backend = value?.trim().toLowerCase() || "searxng";
-  if (backend !== "brave" && backend !== "searxng") {
-    throw new Error("SEARCH_PROVIDER must be either brave or searxng");
+  if (backend !== "auto" && backend !== "brave" && backend !== "searxng") {
+    throw new Error("SEARCH_PROVIDER must be auto, brave, or searxng");
   }
   return backend;
 }

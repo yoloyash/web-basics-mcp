@@ -13,7 +13,7 @@ export const MAX_LENGTH = 20000;
 export const DEFAULT_SEARCH_LIMIT = 5;
 export const MAX_SEARCH_LIMIT = 10;
 export const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8088";
-export type SearchBackend = "brave" | "searxng";
+export type SearchBackend = "auto" | "brave" | "searxng";
 
 export interface WebSearchInput {
   query: string;
@@ -31,6 +31,11 @@ export type SearchProvider = (
   query: string,
   signal?: AbortSignal,
 ) => Promise<SearchResult[]>;
+
+export interface SearchProviderEntry {
+  name: string;
+  search: SearchProvider;
+}
 
 export interface FetchUrlInput {
   url: string;
@@ -93,6 +98,40 @@ export function createWebBasics(options: WebBasicsOptions = {}): WebBasics {
 
 export { createBraveSearchProvider };
 
+export function createFallbackSearchProvider(
+  providers: readonly SearchProviderEntry[],
+): SearchProvider {
+  if (providers.length === 0) {
+    throw validationError("At least one search provider is required");
+  }
+
+  return async (query, signal) => {
+    const failures: Array<{ name: string; error: unknown }> = [];
+    let completedWithoutResults = false;
+
+    for (const provider of providers) {
+      signal?.throwIfAborted();
+      try {
+        const results = await provider.search(query, signal);
+        signal?.throwIfAborted();
+        if (results.length > 0) return results;
+        completedWithoutResults = true;
+      } catch (error) {
+        signal?.throwIfAborted();
+        failures.push({ name: provider.name, error });
+      }
+    }
+
+    if (completedWithoutResults) return [];
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `All search providers failed: ${failures
+        .map((failure) => `${failure.name}: ${errorMessage(failure.error)}`)
+        .join("; ")}`,
+    );
+  };
+}
+
 export function createSearxngSearchProvider(
   searxngUrl = DEFAULT_SEARXNG_URL,
 ): SearchProvider {
@@ -112,6 +151,22 @@ export function createSearxngSearchProvider(
 
 function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvider {
   const backend = options.searchBackend ?? "searxng";
+  if (backend === "auto") {
+    const providers: SearchProviderEntry[] = [];
+    if (options.braveApiKey?.trim()) {
+      providers.push({
+        name: "brave",
+        search: createBraveSearchProvider(options.braveApiKey),
+      });
+    }
+    if (options.searxngUrl?.trim()) {
+      providers.push({
+        name: "searxng",
+        search: createSearxngSearchProvider(options.searxngUrl),
+      });
+    }
+    return createFallbackSearchProvider(providers);
+  }
   if (backend === "brave") {
     return createBraveSearchProvider(options.braveApiKey ?? "");
   }
@@ -119,6 +174,10 @@ function createConfiguredSearchProvider(options: WebBasicsOptions): SearchProvid
     return createSearxngSearchProvider(options.searxngUrl);
   }
   throw validationError(`Unsupported search backend: ${String(backend)}`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export async function webSearch(
