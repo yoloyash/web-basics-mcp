@@ -1,5 +1,6 @@
 import { TtlLruCache } from "./cache.js";
 import { validationError } from "./errors.js";
+import { HttpStatusError } from "./http.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_QUERY_LENGTH = 500;
@@ -14,9 +15,18 @@ export interface SearxResult {
   url: string;
   title?: string;
   content?: string;
+  publishedDate?: string;
+  author?: string;
 }
 
-const searchCache = new TtlLruCache<string, SearxResult[]>({
+export interface SearxResponse {
+  answers?: unknown[];
+  results: SearxResult[];
+  suggestions?: string[];
+  unresponsiveEngines?: Array<[string, string]>;
+}
+
+const searchCache = new TtlLruCache<string, SearxResponse>({
   maxEntries: SEARCH_CACHE_MAX_ENTRIES,
   maxWeight: SEARCH_CACHE_MAX_BYTES,
   ttlMs: SEARCH_CACHE_TTL_MS,
@@ -27,12 +37,16 @@ export async function searchSearxng(
   normalizedQuery: NormalizedQuery,
   searxngUrl: string,
   signal?: AbortSignal,
-): Promise<SearxResult[]> {
+  recency?: "day" | "week" | "month" | "year",
+): Promise<SearxResponse> {
   const url = createSearchUrl(searxngUrl);
   url.searchParams.set("q", normalizedQuery);
   url.searchParams.set("format", "json");
   url.searchParams.set("safesearch", "1");
   url.searchParams.set("language", "all");
+  if (recency) {
+    url.searchParams.set("time_range", recency === "week" ? "month" : recency);
+  }
 
   return searchCache.getOrLoad(
     url.toString(),
@@ -42,15 +56,25 @@ export async function searchSearxng(
   );
 }
 
-async function fetchSearchResults(url: URL, signal: AbortSignal): Promise<SearxResult[]> {
+async function fetchSearchResults(url: URL, signal: AbortSignal): Promise<SearxResponse> {
   const res = await globalThis.fetch(url.toString(), {
     headers: { Accept: "application/json" },
     signal: AbortSignal.any([signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)]),
   });
-  if (!res.ok) throw new Error(`HTTP status ${res.status} from SearXNG`);
+  if (!res.ok) throw new HttpStatusError(res.status);
 
-  const json = (await res.json()) as { results?: SearxResult[] };
-  return json.results ?? [];
+  const json = (await res.json()) as {
+    answers?: unknown[];
+    results?: SearxResult[];
+    suggestions?: string[];
+    unresponsive_engines?: Array<[string, string]>;
+  };
+  return {
+    answers: json.answers,
+    results: json.results ?? [],
+    suggestions: json.suggestions,
+    unresponsiveEngines: json.unresponsive_engines,
+  };
 }
 
 export function normalizeQuery(input: string): NormalizedQuery {

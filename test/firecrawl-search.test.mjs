@@ -26,13 +26,15 @@ test("maps keyless Firecrawl web results onto the public contract", async () => 
     lookupHost: publicLookup,
   });
 
-  assert.deepEqual(await provider("firecrawl query", undefined, 3), [
-    {
-      link: "https://example.com/result",
+  assert.deepEqual(await provider.search({ query: "firecrawl query", limit: 3 }), {
+    provider: "firecrawl",
+    authMode: "keyless",
+    sources: [{
+      url: "https://example.com/result",
       title: "Example result",
       snippet: "Example snippet",
-    },
-  ]);
+    }],
+  });
   assert.equal(request.url.toString(), "https://api.firecrawl.dev/v2/search");
   assert.equal(request.init.method, "POST");
   assert.equal(request.init.redirect, "manual");
@@ -60,14 +62,14 @@ test("coalesces concurrent Firecrawl searches without retaining results", async 
     lookupHost: publicLookup,
   });
 
-  const first = provider("same query");
-  const second = provider("same query");
+  const first = provider.search({ query: "same query" });
+  const second = provider.search({ query: "same query" });
   await requestStarted;
   assert.equal(calls, 1);
   releaseRequest();
   await Promise.all([first, second]);
 
-  await provider("same query");
+  await provider.search({ query: "same query" });
   assert.equal(calls, 2);
 });
 
@@ -82,8 +84,8 @@ test("does not coalesce searches with different requested limits", async () => {
   });
 
   await Promise.all([
-    provider("same query", undefined, 1),
-    provider("same query", undefined, 2),
+    provider.search({ query: "same query", limit: 1 }),
+    provider.search({ query: "same query", limit: 2 }),
   ]);
   assert.deepEqual(limits.sort(), [1, 2]);
 });
@@ -94,7 +96,7 @@ test("surfaces Firecrawl application errors", async () => {
     lookupHost: publicLookup,
   });
 
-  await assert.rejects(() => provider("failed query"), /quota exhausted/);
+  await assert.rejects(() => provider.search({ query: "failed query" }), /quota exhausted/);
 });
 
 function jsonResponse(value) {

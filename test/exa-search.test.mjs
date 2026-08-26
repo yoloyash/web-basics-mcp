@@ -36,18 +36,21 @@ test("maps anonymous Exa MCP text results onto the public contract", async () =>
     lookupHost: publicLookup,
   });
 
-  assert.deepEqual(await provider("exa query", undefined, 4), [
-    {
-      link: "https://example.com/first",
-      title: "First result",
-      snippet: "Useful first highlight.",
-    },
-    {
-      link: "https://example.com/second",
-      title: "Second result",
-      snippet: "Useful second highlight.",
-    },
-  ]);
+  assert.deepEqual(await provider.search({ query: "exa query", limit: 4 }), {
+    provider: "exa",
+    sources: [
+      {
+        url: "https://example.com/first",
+        title: "First result",
+        snippet: "Useful first highlight.",
+      },
+      {
+        url: "https://example.com/second",
+        title: "Second result",
+        snippet: "Useful second highlight.",
+      },
+    ],
+  });
   assert.equal(request.url.origin, "https://mcp.exa.ai");
   assert.equal(request.url.searchParams.get("tools"), "web_search_exa");
   assert.equal(request.init.headers["x-exa-source"], "web-basics");
@@ -74,11 +77,14 @@ test("accepts structured Exa MCP results", async () => {
     lookupHost: publicLookup,
   });
 
-  assert.deepEqual(await provider("structured query"), [{
-    link: "https://example.com/structured",
-    title: "Structured",
-    snippet: "One Two",
-  }]);
+  assert.deepEqual(await provider.search({ query: "structured query" }), {
+    provider: "exa",
+    sources: [{
+      url: "https://example.com/structured",
+      title: "Structured",
+      snippet: "One Two",
+    }],
+  });
 });
 
 test("surfaces Exa MCP tool errors", async () => {
@@ -94,7 +100,7 @@ test("surfaces Exa MCP tool errors", async () => {
   });
 
   await assert.rejects(
-    () => provider("failed query"),
+    () => provider.search({ query: "failed query" }),
     /anonymous rate limit reached/,
   );
 });

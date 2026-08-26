@@ -20,7 +20,7 @@ codex mcp add web-basics \
   -- npx -y @yoloyash/web-basics
 ```
 
-Automatic search uses only configured providers by default. Enabling `SEARCH_ALLOW_KEYLESS_FALLBACK` appends keyless Firecrawl, anonymous Exa MCP, and DuckDuckGo HTML. Searches are sequential and stop after the first provider returns results. Keyless services are best-effort and may enforce their own rate limits or bot challenges.
+Automatic search uses only configured providers by default. Enabling `SEARCH_ALLOW_KEYLESS_FALLBACK` appends keyless Firecrawl, anonymous Exa MCP, and DuckDuckGo HTML. Searches are sequential and stop after the first provider returns renderable content. Empty responses fall through like provider errors. Keyless services are best-effort and may enforce their own rate limits or bot challenges.
 
 To prioritize Brave and then a SearXNG instance before keyless fallback:
 
@@ -78,8 +78,43 @@ Searches the selected provider or automatic fallback chain.
 
 - `query`: search query
 - `limit`: optional result count from 1 to 10; defaults to 5
+- `recency`: optional `day`, `week`, `month`, or `year` filter
+- `max_tokens`: optional provider answer token cap
+- `temperature`: optional provider sampling temperature
+- `num_search_results`: optional provider search breadth or local result cap from 1 to 10
 
-Returns results with `link`, `title`, and `snippet`.
+The structured result uses a unified provider response contract:
+
+```json
+{
+  "response": {
+    "provider": "firecrawl",
+    "sources": [
+      {
+        "title": "Example result",
+        "url": "https://example.com/result",
+        "snippet": "Example snippet"
+      }
+    ],
+    "requestId": "request-id-if-provided",
+    "authMode": "keyless"
+  }
+}
+```
+
+`response.provider` identifies the provider that served the result. Providers may also return `answer`, `citations`, `searchQueries`, `relatedQuestions`, `usage`, `model`, `requestId`, and `authMode`. A successful response does not include previous failed attempts. If every provider fails, the MCP call returns `Error: ...` as normal text plus `{ response: { provider, sources: [] }, error }` as structured content.
+
+The root API returns the `SearchResponse` directly:
+
+```js
+const web = createWebBasics({
+  searchBackend: "auto",
+  allowKeylessFallback: true,
+});
+
+const response = await web.webSearch({ query: "TypeScript 6", limit: 5 });
+console.log(response.provider, response.sources);
+```
 
 ### `fetch_url`
 

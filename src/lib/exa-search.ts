@@ -1,4 +1,3 @@
-import type { SearchProvider } from "../api.js";
 import {
   fetchPublicHttpUrl,
   readBytesCapped,
@@ -6,8 +5,11 @@ import {
 } from "./http.js";
 import {
   coalesceSearchProvider,
-  normalizeSearchResults,
-  type SearchResultCandidate,
+  createSearchProvider,
+  normalizeSearchProviderLimit,
+  normalizeSearchSources,
+  type SearchProvider,
+  type SearchSourceCandidate,
 } from "./search-provider.js";
 
 const EXA_MCP_URL = "https://mcp.exa.ai/mcp?tools=web_search_exa";
@@ -22,59 +24,68 @@ type ExaDependencies = Pick<
 export function createExaSearchProvider(
   dependencies: ExaDependencies = {},
 ): SearchProvider {
-  return coalesceSearchProvider(async (query, signal, limit) => {
-    const { res } = await fetchPublicHttpUrl(EXA_MCP_URL, {
-      ...dependencies,
-      body: JSON.stringify({
-        id: "web-basics-search",
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: {
-          arguments: { numResults: limit, query },
-          name: "web_search_exa",
-        },
-      }),
-      headers: {
-        Accept: "application/json, text/event-stream",
-        "Content-Type": "application/json",
-        "x-exa-source": "web-basics",
-      },
-      maxRedirects: 0,
-      maxTransientRetries: 0,
-      method: "POST",
-      signal,
-      timeoutMs: SEARCH_TIMEOUT_MS,
-    });
-
-    const contentType = res.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-    if (
-      contentType !== "application/json" &&
-      contentType !== "text/event-stream" &&
-      !contentType?.endsWith("+json")
-    ) {
-      throw new Error(`Unsupported content-type from Exa: ${contentType ?? "unknown"}`);
-    }
-    const text = new TextDecoder().decode(
-      await readBytesCapped(res, MAX_RESPONSE_BYTES, signal),
-    );
-    const response = parseMcpResponse(text);
-    if (!isRecord(response)) throw new Error("Failed to parse Exa MCP response");
-    if (isRecord(response.error)) {
-      throw new Error(
-        typeof response.error.message === "string"
-          ? `Exa MCP error: ${response.error.message}`
-          : "Exa MCP returned an error",
+  return coalesceSearchProvider(createSearchProvider({
+    id: "exa",
+    label: "Exa",
+    async search(params) {
+      const limit = normalizeSearchProviderLimit(
+        params.numSearchResults ?? params.limit,
       );
-    }
-    if (!isRecord(response.result)) {
-      throw new Error("Exa MCP response did not include a result");
-    }
-    if (response.result.isError === true) {
-      throw new Error(extractErrorText(response.result) ?? "Exa MCP search failed");
-    }
+      const { res } = await fetchPublicHttpUrl(EXA_MCP_URL, {
+        ...dependencies,
+        body: JSON.stringify({
+          id: "web-basics-search",
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: {
+            arguments: { numResults: limit, query: params.query },
+            name: "web_search_exa",
+          },
+        }),
+        headers: {
+          Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
+          "x-exa-source": "web-basics",
+        },
+        maxRedirects: 0,
+        maxTransientRetries: 0,
+        method: "POST",
+        signal: params.signal,
+        timeoutMs: SEARCH_TIMEOUT_MS,
+      });
 
-    return normalizeSearchResults(extractExaCandidates(response.result), limit);
-  });
+      const contentType = res.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+      if (
+        contentType !== "application/json" &&
+        contentType !== "text/event-stream" &&
+        !contentType?.endsWith("+json")
+      ) {
+        throw new Error(`Unsupported content-type from Exa: ${contentType ?? "unknown"}`);
+      }
+      const text = new TextDecoder().decode(
+        await readBytesCapped(res, MAX_RESPONSE_BYTES, params.signal),
+      );
+      const response = parseMcpResponse(text);
+      if (!isRecord(response)) throw new Error("Failed to parse Exa MCP response");
+      if (isRecord(response.error)) {
+        throw new Error(
+          typeof response.error.message === "string"
+            ? `Exa MCP error: ${response.error.message}`
+            : "Exa MCP returned an error",
+        );
+      }
+      if (!isRecord(response.result)) {
+        throw new Error("Exa MCP response did not include a result");
+      }
+      if (response.result.isError === true) {
+        throw new Error(extractErrorText(response.result) ?? "Exa MCP search failed");
+      }
+
+      return {
+        sources: normalizeSearchSources(extractExaCandidates(response.result), limit),
+      };
+    },
+  }));
 }
 
 function parseMcpResponse(text: string): unknown {
@@ -95,7 +106,7 @@ function parseMcpResponse(text: string): unknown {
   return parsed;
 }
 
-function extractExaCandidates(result: Record<string, unknown>): SearchResultCandidate[] {
+function extractExaCandidates(result: Record<string, unknown>): SearchSourceCandidate[] {
   const structured = result.structuredContent;
   const structuredCandidates = candidatesFromPayload(structured);
   if (structuredCandidates.length > 0) return structuredCandidates;
@@ -112,13 +123,13 @@ function extractExaCandidates(result: Record<string, unknown>): SearchResultCand
   return [];
 }
 
-function candidatesFromPayload(payload: unknown): SearchResultCandidate[] {
+function candidatesFromPayload(payload: unknown): SearchSourceCandidate[] {
   if (!isRecord(payload)) return [];
   const results = Array.isArray(payload.results) ? payload.results : [];
   return results.flatMap((result) => {
     if (!isRecord(result) || typeof result.url !== "string") return [];
     return [{
-      link: result.url,
+      url: result.url,
       title: typeof result.title === "string" ? result.title : undefined,
       snippet: firstString(
         result.summary,
@@ -131,13 +142,13 @@ function candidatesFromPayload(payload: unknown): SearchResultCandidate[] {
   });
 }
 
-function candidatesFromText(text: string): SearchResultCandidate[] {
+function candidatesFromText(text: string): SearchSourceCandidate[] {
   return text.split(/\n\s*---\s*\n/gu).flatMap((section) => {
     const title = /^Title:\s*(.+)$/mu.exec(section)?.[1]?.trim();
-    const link = /^URL:\s*(\S+)$/mu.exec(section)?.[1]?.trim();
-    if (!link) return [];
+    const url = /^URL:\s*(\S+)$/mu.exec(section)?.[1]?.trim();
+    if (!url) return [];
     const highlights = /(?:^|\n)Highlights:\s*\n([\s\S]*)$/mu.exec(section)?.[1]?.trim();
-    return [{ link, title, snippet: highlights }];
+    return [{ url, title, snippet: highlights }];
   });
 }
 

@@ -1,5 +1,3 @@
-import type { SearchProvider, SearchResult } from "../api.js";
-import { TtlLruCache } from "./cache.js";
 import { validationError } from "./errors.js";
 import {
   fetchPublicHttpUrl,
@@ -7,7 +5,15 @@ import {
   type FetchPublicHttpOptions,
 } from "./http.js";
 import type { NormalizedQuery } from "./search.js";
-import { normalizeSearchProviderLimit } from "./search-provider.js";
+import {
+  coalesceSearchProvider,
+  createSearchProvider,
+  normalizeSearchProviderLimit,
+  normalizeSearchSources,
+  type SearchProvider,
+  type SearchSourceCandidate,
+} from "./search-provider.js";
+import type { SearchResponse } from "./search-types.js";
 
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 const BRAVE_API_VERSION = "2023-01-01";
@@ -17,6 +23,12 @@ const BRAVE_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const BRAVE_RETRY_DELAY_MS = 1_000;
 const BRAVE_MAX_RETRY_DELAY_MS = 2_000;
 const BRAVE_TIMEOUT_MS = 10_000;
+const RECENCY_MAP = {
+  day: "pd",
+  week: "pw",
+  month: "pm",
+  year: "py",
+} as const;
 
 type BraveSearchDependencies = Pick<
   FetchPublicHttpOptions,
@@ -37,27 +49,25 @@ export function createBraveSearchProvider(
   const subscriptionToken = apiKey.trim();
   validateApiKey(subscriptionToken);
 
-  const inFlightSearches = new TtlLruCache<string, SearchResult[]>({
-    maxEntries: 100,
-    ttlMs: 1,
-  });
-
-  return async (query, signal, limit) => {
-    validateBraveQuery(query);
-    const requestedLimit = normalizeSearchProviderLimit(limit);
-    return inFlightSearches.getOrLoad(
-      JSON.stringify([query, requestedLimit]),
-      (loadSignal) => searchBrave(
-        query as NormalizedQuery,
+  return coalesceSearchProvider(createSearchProvider({
+    id: "brave",
+    label: "Brave",
+    isAvailable: () => subscriptionToken.length > 0,
+    async search(params) {
+      validateBraveQuery(params.query);
+      const requestedLimit = normalizeSearchProviderLimit(
+        params.numSearchResults ?? params.limit,
+      );
+      return searchBrave(
+        params.query as NormalizedQuery,
         subscriptionToken,
         requestedLimit,
-        loadSignal,
+        params.signal ?? new AbortController().signal,
+        params.recency,
         dependencies,
-      ),
-      () => false,
-      signal,
-    );
-  };
+      );
+    },
+  }));
 }
 
 async function searchBrave(
@@ -65,14 +75,16 @@ async function searchBrave(
   apiKey: string,
   limit: number,
   signal: AbortSignal,
+  recency: "day" | "week" | "month" | "year" | undefined,
   dependencies: BraveSearchDependencies,
-): Promise<SearchResult[]> {
+): Promise<Omit<SearchResponse, "provider">> {
   const url = new URL(BRAVE_SEARCH_URL);
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(limit));
   url.searchParams.set("result_filter", "web");
   url.searchParams.set("safesearch", "moderate");
   url.searchParams.set("text_decorations", "false");
+  if (recency) url.searchParams.set("freshness", RECENCY_MAP[recency]);
 
   const { res } = await fetchPublicHttpUrl(url.toString(), {
     ...dependencies,
@@ -102,7 +114,15 @@ async function searchBrave(
     throw new Error("Failed to parse Brave Search response");
   }
 
-  return parseBraveResults(payload);
+  const requestId =
+    res.headers.get("x-request-id") ??
+    res.headers.get("request-id") ??
+    undefined;
+  return {
+    sources: normalizeSearchSources(parseBraveResults(payload), limit),
+    authMode: "api_key",
+    ...(requestId ? { requestId } : {}),
+  };
 }
 
 function braveRetryDelayMs(response: Response): number {
@@ -122,7 +142,7 @@ function braveRetryDelayMs(response: Response): number {
   );
 }
 
-function parseBraveResults(payload: unknown): SearchResult[] {
+function parseBraveResults(payload: unknown): SearchSourceCandidate[] {
   if (!isRecord(payload)) throw new Error("Failed to parse Brave Search response");
   if (payload.web === undefined || payload.web === null) return [];
   if (!isRecord(payload.web)) throw new Error("Failed to parse Brave Search response");
@@ -134,9 +154,9 @@ function parseBraveResults(payload: unknown): SearchResult[] {
   return payload.web.results
     .filter(isBraveWebResult)
     .map((result) => ({
-      link: result.url,
+      url: result.url,
       title: result.title ?? result.url,
-      snippet: result.description ?? "",
+      snippet: result.description,
     }));
 }
 
