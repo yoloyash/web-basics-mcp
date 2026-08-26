@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.4.0...v0.5.0) (2026-08-26)
+
+
+### Features
+
+* expose unified search responses ([#23](https://github.com/yoloyash/web-basics-mcp/issues/23)) ([262cd87](https://github.com/yoloyash/web-basics-mcp/commit/262cd876b17849620764969b9ae98a081e470315))
+
 ## [0.4.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.3.0...v0.4.0) (2026-08-25)
 
 
