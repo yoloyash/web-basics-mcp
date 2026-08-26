@@ -61,6 +61,29 @@ test("maps SearXNG answers and suggestions onto the unified response", async () 
   }
 });
 
+test("keeps a SearXNG answer when upstream engines are unresponsive", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    answers: ["Direct answer"],
+    results: [],
+    unresponsive_engines: [["example", "timeout"]],
+  }), { headers: { "content-type": "application/json" } });
+
+  try {
+    const response = await webSearch(
+      { query: "searxng partial answer" },
+      createSearxngSearchProvider("https://search-partial.example"),
+    );
+    assert.deepEqual(response, {
+      provider: "searxng",
+      answer: "Direct answer",
+      sources: [],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("webSearch normalizes, limits, and formats results", async () => {
   const seenQueries = [];
   const seenLimits = [];
@@ -70,8 +93,11 @@ test("webSearch normalizes, limits, and formats results", async () => {
       seenQueries.push(params.query);
       seenLimits.push(params.limit);
       return {
-        provider: "duckduckgo",
-        sources: [{ url: "https://example.com/a", title: "A", snippet: "Alpha" }],
+        provider: "none",
+        sources: [
+          { url: "https://example.com/a", title: "A", snippet: "Alpha" },
+          { url: "https://example.com/b", title: "B", snippet: "Beta" },
+        ],
       };
     }),
   );

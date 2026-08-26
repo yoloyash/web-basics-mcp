@@ -71,4 +71,3 @@ export class SearchProviderError extends Error {
     this.name = "SearchProviderError";
   }
 }
-

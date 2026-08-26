@@ -33,6 +33,8 @@ export const MAX_LENGTH = 20000;
 export const DEFAULT_SEARCH_LIMIT = 5;
 export const MAX_SEARCH_LIMIT = MAX_PROVIDER_SEARCH_LIMIT;
 export const DEFAULT_SEARXNG_URL = "http://127.0.0.1:8088";
+const MAX_SEARCH_PROVIDER_ERROR_LENGTH = 500;
+const MAX_SEARCH_CHAIN_ERROR_LENGTH = 4000;
 export type SearchBackend = SearchProviderPreference;
 
 export interface WebSearchInput {
@@ -148,7 +150,17 @@ export function createSearxngSearchProvider(
           ageSeconds: dateToAgeSeconds(result.publishedDate),
           author: result.author,
         })), limit);
-      if (sources.length === 0 && response.unresponsiveEngines?.length) {
+      const answer = formatSearxngAnswers(response.answers);
+      const relatedQuestions = response.suggestions?.flatMap((question) => {
+        const normalized = question.trim();
+        return normalized ? [normalized] : [];
+      }).slice(0, limit);
+      if (
+        sources.length === 0 &&
+        !answer &&
+        !relatedQuestions?.length &&
+        response.unresponsiveEngines?.length
+      ) {
         throw new SearchProviderError(
           "searxng",
           `SearXNG returned no usable results; upstream engines failed: ${response.unresponsiveEngines
@@ -157,12 +169,11 @@ export function createSearxngSearchProvider(
           503,
         );
       }
-      const answer = formatSearxngAnswers(response.answers);
       return {
         sources,
         ...(answer ? { answer } : {}),
-        ...(response.suggestions?.length ? {
-          relatedQuestions: response.suggestions,
+        ...(relatedQuestions?.length ? {
+          relatedQuestions,
         } : {}),
       };
     },
@@ -273,6 +284,7 @@ async function executeWebSearch(
       MAX_SEARCH_LIMIT,
     );
   }
+  const sourceLimit = input.numSearchResults ?? limit;
   input.signal?.throwIfAborted();
   const params: SearchParams = {
     query,
@@ -302,8 +314,13 @@ async function executeWebSearch(
         );
       }
       availableProviderCount += 1;
-      const response = await provider.search(params);
+      const providerResponse = await provider.search(params);
       input.signal?.throwIfAborted();
+      const response: SearchResponse = {
+        ...providerResponse,
+        provider: provider.id,
+        sources: normalizeSearchSources(providerResponse.sources, sourceLimit),
+      };
       if (!hasRenderableSearchContent(response)) {
         throw new SearchProviderError(
           provider.id,
@@ -323,7 +340,7 @@ async function executeWebSearch(
   }
 
   const lastFailure = failures.at(-1);
-  const message = failures.length > 1
+  const unboundedMessage = failures.length > 1
     ? `All web search providers failed: ${failures
       .map(({ provider, error }) =>
         `${provider.id}: ${formatSearchProviderFailure(error, provider)}`)
@@ -331,6 +348,7 @@ async function executeWebSearch(
     : lastFailure
       ? formatSearchProviderFailure(lastFailure.error, lastFailure.provider)
       : `Unknown error from ${lastProvider?.label ?? "web search provider"}`;
+  const message = unboundedMessage.slice(0, MAX_SEARCH_CHAIN_ERROR_LENGTH);
   throw new SearchChainError(
     failures.map(({ error }) => error),
     message,
@@ -414,9 +432,21 @@ function formatSearchProviderFailure(
     if (error.status === 401 || error.status === 403) {
       return `${provider.label} authorization failed (${error.status}). Check API key or base URL.`;
     }
-    return error.message;
+    return normalizeSearchProviderErrorMessage(error.message, provider.label);
   }
-  return error instanceof Error ? error.message : `Unknown error from ${provider.label}`;
+  return error instanceof Error
+    ? normalizeSearchProviderErrorMessage(error.message, provider.label)
+    : `Unknown error from ${provider.label}`;
+}
+
+function normalizeSearchProviderErrorMessage(
+  message: string,
+  providerLabel: string,
+): string {
+  return message.replace(/\s+/gu, " ").trim().slice(
+    0,
+    MAX_SEARCH_PROVIDER_ERROR_LENGTH,
+  ) || `Unknown error from ${providerLabel}`;
 }
 
 export async function fetchUrl(input: FetchUrlInput): Promise<FetchUrlResult> {

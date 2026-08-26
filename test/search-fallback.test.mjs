@@ -60,6 +60,24 @@ test("treats an empty response as a provider failure and reports the failed chai
   );
 });
 
+test("bounds provider errors in a failed chain", async () => {
+  const providers = Array.from({ length: 10 }, () =>
+    testProvider("brave", async () => {
+      throw new SearchProviderError("brave", `  ${"failure ".repeat(100)}`);
+    })
+  );
+
+  await assert.rejects(
+    () => webSearch({ query: "bounded failure" }, providers),
+    (error) => {
+      assert.ok(error instanceof SearchChainError);
+      assert.equal(error.message.length, 4000);
+      assert.equal(error.message.includes("  "), false);
+      return true;
+    },
+  );
+});
+
 test("skips unavailable automatic candidates", async () => {
   let unavailableCalled = false;
   const response = await webSearch({ query: "available" }, [

@@ -66,7 +66,7 @@ export function createSearchProvider(
       try {
         const response = await definition.search(params);
         params.signal?.throwIfAborted();
-        return { provider: definition.id, ...response };
+        return { ...response, provider: definition.id };
       } catch (error) {
         params.signal?.throwIfAborted();
         if (error instanceof SearchProviderError) throw error;
