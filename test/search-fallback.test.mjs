@@ -1,114 +1,119 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  createFallbackSearchProvider,
   createWebBasics,
+  SearchChainError,
+  SearchProviderError,
+  webSearch,
 } from "@yoloyash/web-basics";
 
-test("tries providers sequentially until one returns results", async () => {
+test("tries providers sequentially and returns only the successful response", async () => {
   const calls = [];
-  const provider = createFallbackSearchProvider([
-    {
-      name: "first",
-      search: async (_query, _signal, limit) => {
-        calls.push(["first", limit]);
-        throw new Error("unavailable");
-      },
-    },
-    {
-      name: "second",
-      search: async (_query, _signal, limit) => {
-        calls.push(["second", limit]);
-        return [];
-      },
-    },
-    {
-      name: "third",
-      search: async (_query, _signal, limit) => {
-        calls.push(["third", limit]);
-        return [{ link: "https://example.com/", title: "Example", snippet: "Result" }];
-      },
-    },
-    {
-      name: "unused",
-      search: async () => {
-        calls.push(["unused", undefined]);
-        return [];
-      },
-    },
-  ]);
+  const providers = [
+    testProvider("brave", async (params) => {
+      calls.push(["brave", params.limit]);
+      throw new SearchProviderError("brave", "rate limited", 429);
+    }),
+    testProvider("searxng", async (params) => {
+      calls.push(["searxng", params.limit]);
+      return { provider: "searxng", sources: [] };
+    }),
+    testProvider("firecrawl", async (params) => {
+      calls.push(["firecrawl", params.limit]);
+      return {
+        provider: "firecrawl",
+        authMode: "keyless",
+        sources: [{ url: "https://example.com/", title: "Example", snippet: "Result" }],
+      };
+    }),
+    testProvider("exa", async () => {
+      calls.push(["exa", undefined]);
+      return { provider: "exa", sources: [] };
+    }),
+  ];
 
-  assert.deepEqual(await provider("fallback query", undefined, 2), [
-    { link: "https://example.com/", title: "Example", snippet: "Result" },
-  ]);
-  assert.deepEqual(calls, [["first", 2], ["second", 2], ["third", 2]]);
+  assert.deepEqual(await webSearch({ query: "fallback query", limit: 2 }, providers), {
+    provider: "firecrawl",
+    authMode: "keyless",
+    sources: [{ url: "https://example.com/", title: "Example", snippet: "Result" }],
+  });
+  assert.deepEqual(calls, [["brave", 2], ["searxng", 2], ["firecrawl", 2]]);
 });
 
-test("does not hide provider failures behind an empty result", async () => {
-  const provider = createFallbackSearchProvider([
-    { name: "failed", search: async () => { throw new Error("offline"); } },
-    { name: "empty", search: async () => [] },
-  ]);
+test("treats an empty response as a provider failure and reports the failed chain", async () => {
+  const providers = [
+    testProvider("brave", async () => {
+      throw new SearchProviderError("brave", "rate limited", 429);
+    }),
+    testProvider("searxng", async () => ({ provider: "searxng", sources: [] })),
+  ];
 
   await assert.rejects(
-    () => provider("no matches"),
-    /No search provider returned results: failed: offline; empty: returned no results/,
+    () => webSearch({ query: "no matches" }, providers),
+    (error) => {
+      assert.ok(error instanceof SearchChainError);
+      assert.equal(error.provider, "searxng");
+      assert.match(error.message, /brave: rate limited/);
+      assert.match(error.message, /searxng: SearXNG returned no renderable search content/);
+      return true;
+    },
   );
 });
 
-test("returns an empty result when every provider completed without results", async () => {
-  const provider = createFallbackSearchProvider([
-    { name: "first", search: async () => [] },
-    { name: "second", search: async () => [] },
-  ]);
-
-  assert.deepEqual(await provider("no matches"), []);
-});
-
-test("reports every provider when the complete chain fails", async () => {
-  const provider = createFallbackSearchProvider([
-    { name: "brave", search: async () => { throw new Error("rate limited"); } },
-    { name: "searxng", search: async () => { throw new Error("offline"); } },
-  ]);
+test("bounds provider errors in a failed chain", async () => {
+  const providers = Array.from({ length: 10 }, () =>
+    testProvider("brave", async () => {
+      throw new SearchProviderError("brave", `  ${"failure ".repeat(100)}`);
+    })
+  );
 
   await assert.rejects(
-    () => provider("failed query"),
-    /All search providers failed: brave: rate limited; searxng: offline/,
+    () => webSearch({ query: "bounded failure" }, providers),
+    (error) => {
+      assert.ok(error instanceof SearchChainError);
+      assert.equal(error.message.length, 4000);
+      assert.equal(error.message.includes("  "), false);
+      return true;
+    },
   );
+});
+
+test("skips unavailable automatic candidates", async () => {
+  let unavailableCalled = false;
+  const response = await webSearch({ query: "available" }, [
+    testProvider("brave", async () => {
+      unavailableCalled = true;
+      return { provider: "brave", sources: [] };
+    }, false),
+    testProvider("duckduckgo", async () => ({
+      provider: "duckduckgo",
+      sources: [{ url: "https://example.com/", title: "Example" }],
+    })),
+  ]);
+
+  assert.equal(unavailableCalled, false);
+  assert.equal(response.provider, "duckduckgo");
 });
 
 test("does not fall through after caller cancellation", async () => {
   const controller = new AbortController();
   let fallbackCalled = false;
-  const provider = createFallbackSearchProvider([
-    {
-      name: "active",
-      search: async () => {
-        controller.abort();
-        throw new Error("request aborted");
-      },
-    },
-    {
-      name: "fallback",
-      search: async () => {
-        fallbackCalled = true;
-        return [];
-      },
-    },
-  ]);
+  const providers = [
+    testProvider("brave", async () => {
+      controller.abort();
+      throw new Error("request aborted");
+    }),
+    testProvider("searxng", async () => {
+      fallbackCalled = true;
+      return { provider: "searxng", sources: [] };
+    }),
+  ];
 
   await assert.rejects(
-    () => provider("cancelled query", controller.signal),
+    () => webSearch({ query: "cancelled query", signal: controller.signal }, providers),
     { name: "AbortError" },
   );
   assert.equal(fallbackCalled, false);
-});
-
-test("rejects an empty provider chain", () => {
-  assert.throws(
-    () => createFallbackSearchProvider([]),
-    /At least one search provider is required/,
-  );
 });
 
 test("requires configured providers or keyless permission for automatic search", () => {
@@ -135,3 +140,14 @@ test("constructs explicit keyless backends without automatic permission", () => 
     assert.doesNotThrow(() => createWebBasics({ searchBackend }));
   }
 });
+
+function testProvider(id, search, available = true) {
+  const label = id === "searxng" ? "SearXNG" : `${id[0].toUpperCase()}${id.slice(1)}`;
+  return {
+    id,
+    label,
+    isAvailable: () => available,
+    isExplicitlyAvailable: () => available,
+    search,
+  };
+}

@@ -30,8 +30,55 @@ test("caches identical SearXNG searches", async () => {
     const second = await web.webSearch({ query: "cache integration query", limit: 2 });
 
     assert.equal(calls, 1);
-    assert.equal(first.length, 1);
-    assert.equal(second.length, 2);
+    assert.equal(first.sources.length, 1);
+    assert.equal(second.sources.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("maps SearXNG answers and suggestions onto the unified response", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    answers: ["Direct answer"],
+    suggestions: ["Related question?"],
+    results: [],
+  }), { headers: { "content-type": "application/json" } });
+
+  try {
+    const response = await webSearch(
+      { query: "searxng answer metadata" },
+      createSearxngSearchProvider("https://search-answer.example"),
+    );
+    assert.deepEqual(response, {
+      provider: "searxng",
+      answer: "Direct answer",
+      sources: [],
+      relatedQuestions: ["Related question?"],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("keeps a SearXNG answer when upstream engines are unresponsive", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    answers: ["Direct answer"],
+    results: [],
+    unresponsive_engines: [["example", "timeout"]],
+  }), { headers: { "content-type": "application/json" } });
+
+  try {
+    const response = await webSearch(
+      { query: "searxng partial answer" },
+      createSearxngSearchProvider("https://search-partial.example"),
+    );
+    assert.deepEqual(response, {
+      provider: "searxng",
+      answer: "Direct answer",
+      sources: [],
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -42,31 +89,35 @@ test("webSearch normalizes, limits, and formats results", async () => {
   const seenLimits = [];
   const results = await webSearch(
     { query: " typescript ", limit: 1 },
-    async (query, _signal, limit) => {
-      seenQueries.push(query);
-      seenLimits.push(limit);
-      return [
-        { link: "https://example.com/a", title: "A", snippet: "Alpha" },
-        { link: "https://example.com/b", title: "B", snippet: "Beta" },
-      ];
-    },
+    testProvider("duckduckgo", async (params) => {
+      seenQueries.push(params.query);
+      seenLimits.push(params.limit);
+      return {
+        provider: "none",
+        sources: [
+          { url: "https://example.com/a", title: "A", snippet: "Alpha" },
+          { url: "https://example.com/b", title: "B", snippet: "Beta" },
+        ],
+      };
+    }),
   );
 
   assert.deepEqual(seenQueries, ["typescript"]);
   assert.deepEqual(seenLimits, [1]);
-  assert.deepEqual(results, [
-    { link: "https://example.com/a", title: "A", snippet: "Alpha" },
-  ]);
+  assert.deepEqual(results, {
+    provider: "duckduckgo",
+    sources: [{ url: "https://example.com/a", title: "A", snippet: "Alpha" }],
+  });
 });
 
 test("webSearch rejects invalid queries before searching", async () => {
   let called = false;
   await assert.rejects(
     () =>
-      webSearch({ query: "   " }, async () => {
+      webSearch({ query: "   " }, testProvider("duckduckgo", async () => {
         called = true;
-        return [];
-      }),
+        return { provider: "duckduckgo", sources: [] };
+      })),
     /Query cannot be empty/,
   );
   assert.equal(called, false);
@@ -78,11 +129,24 @@ test("webSearch forwards AbortSignal to the configured provider", async () => {
 
   await webSearch(
     { query: "typescript", signal: controller.signal },
-    async (_query, signal) => {
-      seenSignal = signal;
-      return [];
-    },
+    testProvider("duckduckgo", async (params) => {
+      seenSignal = params.signal;
+      return {
+        provider: "duckduckgo",
+        sources: [{ url: "https://example.com/", title: "Example" }],
+      };
+    }),
   );
 
   assert.equal(seenSignal, controller.signal);
 });
+
+function testProvider(id, search) {
+  return {
+    id,
+    label: "Test",
+    isAvailable: () => true,
+    isExplicitlyAvailable: () => true,
+    search,
+  };
+}

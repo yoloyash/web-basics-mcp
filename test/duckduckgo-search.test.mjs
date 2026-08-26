@@ -27,11 +27,14 @@ test("parses DuckDuckGo no-JavaScript HTML results", async () => {
     lookupHost: publicLookup,
   });
 
-  assert.deepEqual(await provider("duckduckgo query", undefined, 1), [{
-    link: "https://example.com/result",
-    title: "Example result",
-    snippet: "A useful snippet.",
-  }]);
+  assert.deepEqual(await provider.search({ query: "duckduckgo query", limit: 1 }), {
+    provider: "duckduckgo",
+    sources: [{
+      url: "https://example.com/result",
+      title: "Example result",
+      snippet: "A useful snippet.",
+    }],
+  });
   assert.equal(request.url.toString(), "https://html.duckduckgo.com/html/");
   assert.equal(request.init.method, "POST");
   const form = new URLSearchParams(request.init.body);
@@ -46,7 +49,7 @@ test("detects DuckDuckGo bot challenges", async () => {
   });
 
   await assert.rejects(
-    () => provider("challenged query"),
+    () => provider.search({ query: "challenged query" }),
     /bot-detection challenge/,
   );
 });

@@ -29,20 +29,26 @@ test("maps Brave web results onto the public search contract", async () => {
     lookupHost: publicLookup,
   });
 
-  const results = await provider("brave integration query", undefined, 2);
+  const response = await provider.search({
+    query: "brave integration query",
+    limit: 2,
+  });
 
-  assert.deepEqual(results, [
-    {
-      link: "https://example.com/result",
-      title: "Example result",
-      snippet: "Example snippet",
-    },
-    {
-      link: "https://example.com/fallbacks",
-      title: "https://example.com/fallbacks",
-      snippet: "",
-    },
-  ]);
+  assert.deepEqual(response, {
+    provider: "brave",
+    authMode: "api_key",
+    sources: [
+      {
+        url: "https://example.com/result",
+        title: "Example result",
+        snippet: "Example snippet",
+      },
+      {
+        url: "https://example.com/fallbacks",
+        title: "https://example.com/fallbacks",
+      },
+    ],
+  });
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url.origin, "https://api.search.brave.com");
   assert.equal(requests[0].url.pathname, "/res/v1/web/search");
@@ -76,14 +82,14 @@ test("coalesces concurrent Brave searches without caching completed results", as
     lookupHost: publicLookup,
   });
 
-  const first = provider("same query");
-  const second = provider("same query");
+  const first = provider.search({ query: "same query" });
+  const second = provider.search({ query: "same query" });
   await requestStarted;
   assert.equal(calls, 1);
   releaseRequest();
   await Promise.all([first, second]);
 
-  await provider("same query");
+  await provider.search({ query: "same query" });
   assert.equal(calls, 2);
 });
 
@@ -111,9 +117,9 @@ test("rejects queries outside Brave limits before fetching", async () => {
     lookupHost: publicLookup,
   });
 
-  await assert.rejects(() => provider("x".repeat(401)), /cannot exceed 400 characters/);
+  await assert.rejects(() => provider.search({ query: "x".repeat(401) }), /cannot exceed 400 characters/);
   await assert.rejects(
-    () => provider(Array.from({ length: 51 }, () => "word").join(" ")),
+    () => provider.search({ query: Array.from({ length: 51 }, () => "word").join(" ") }),
     /cannot exceed 50 words/,
   );
   assert.equal(calls, 0);
@@ -132,7 +138,7 @@ test("does not follow redirects with the Brave credential", async () => {
     lookupHost: publicLookup,
   });
 
-  await assert.rejects(() => provider("redirect query"), /Too many redirects/);
+  await assert.rejects(() => provider.search({ query: "redirect query" }), /Too many redirects/);
   assert.equal(calls, 1);
 });
 
@@ -154,7 +160,11 @@ test("retries Brave rate limits once using the shortest reset window", async () 
     wait: async (delayMs) => delays.push(delayMs),
   });
 
-  assert.deepEqual(await provider("rate limit query"), []);
+  assert.deepEqual(await provider.search({ query: "rate limit query" }), {
+    provider: "brave",
+    authMode: "api_key",
+    sources: [],
+  });
   assert.equal(calls, 2);
   assert.deepEqual(delays, [1_000]);
 });
@@ -174,7 +184,7 @@ test("caps Brave retry delays and surfaces an exhausted rate limit", async () =>
     wait: async (delayMs) => delays.push(delayMs),
   });
 
-  await assert.rejects(() => provider("exhausted rate limit query"), (error) => {
+  await assert.rejects(() => provider.search({ query: "exhausted rate limit query" }), (error) => {
     assert.equal(classifyError(error).category, "http");
     assert.equal(classifyError(error).retryable, true);
     return true;
@@ -197,8 +207,8 @@ test("rejects malformed and non-JSON Brave responses", async () => {
     lookupHost: publicLookup,
   });
 
-  await assert.rejects(() => malformed("malformed query"), /Failed to parse Brave Search response/);
-  await assert.rejects(() => html("html query"), /Unsupported content-type: text\/html/);
+  await assert.rejects(() => malformed.search({ query: "malformed query" }), /Failed to parse Brave Search response/);
+  await assert.rejects(() => html.search({ query: "html query" }), /Unsupported content-type: text\/html/);
 });
 
 function jsonResponse(value) {

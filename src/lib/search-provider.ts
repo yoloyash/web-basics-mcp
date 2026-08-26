@@ -1,6 +1,12 @@
-import type { SearchProvider, SearchResult } from "../api.js";
 import { TtlLruCache } from "./cache.js";
 import { validationError } from "./errors.js";
+import { HttpStatusError } from "./http.js";
+import {
+  SearchProviderError,
+  type SearchProviderId,
+  type SearchResponse,
+  type SearchSource,
+} from "./search-types.js";
 
 const MAX_IN_FLIGHT_SEARCHES = 100;
 const DEFAULT_PROVIDER_SEARCH_LIMIT = 10;
@@ -9,52 +15,140 @@ const MAX_RESULT_URL_LENGTH = 4096;
 const MAX_RESULT_TITLE_LENGTH = 500;
 const MAX_RESULT_SNIPPET_LENGTH = 1000;
 
-export interface SearchResultCandidate {
-  link: string;
+export interface SearchSourceCandidate {
+  url: string;
   snippet?: string | null;
   title?: string | null;
+  publishedDate?: string | null;
+  ageSeconds?: number | null;
+  author?: string | null;
 }
 
-export function coalesceSearchProvider(search: SearchProvider): SearchProvider {
-  const searches = new TtlLruCache<string, SearchResult[]>({
+export interface SearchParams {
+  query: string;
+  limit?: number;
+  recency?: "day" | "week" | "month" | "year";
+  maxOutputTokens?: number;
+  numSearchResults?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
+export interface SearchProvider {
+  readonly id: SearchProviderId;
+  readonly label: string;
+  isAvailable(): boolean | Promise<boolean>;
+  isExplicitlyAvailable(): boolean | Promise<boolean>;
+  search(params: SearchParams): Promise<SearchResponse>;
+}
+
+export interface SearchProviderDefinition {
+  id: SearchProviderId;
+  label: string;
+  isAvailable?: () => boolean | Promise<boolean>;
+  isExplicitlyAvailable?: () => boolean | Promise<boolean>;
+  search: (params: SearchParams) => Promise<Omit<SearchResponse, "provider">>;
+}
+
+export function createSearchProvider(
+  definition: SearchProviderDefinition,
+): SearchProvider {
+  return {
+    id: definition.id,
+    label: definition.label,
+    isAvailable: definition.isAvailable ?? (() => true),
+    isExplicitlyAvailable:
+      definition.isExplicitlyAvailable ??
+      definition.isAvailable ??
+      (() => true),
+    async search(params) {
+      params.signal?.throwIfAborted();
+      try {
+        const response = await definition.search(params);
+        params.signal?.throwIfAborted();
+        return { ...response, provider: definition.id };
+      } catch (error) {
+        params.signal?.throwIfAborted();
+        if (error instanceof SearchProviderError) throw error;
+        const status = error instanceof HttpStatusError ? error.status : undefined;
+        throw new SearchProviderError(
+          definition.id,
+          error instanceof Error ? error.message : String(error),
+          status,
+          { cause: error },
+        );
+      }
+    },
+  };
+}
+
+export function coalesceSearchProvider(provider: SearchProvider): SearchProvider {
+  const searches = new TtlLruCache<string, SearchResponse>({
     maxEntries: MAX_IN_FLIGHT_SEARCHES,
     ttlMs: 1,
   });
 
-  return (query, signal, limit) => {
-    const requestedLimit = normalizeSearchProviderLimit(limit);
-    return searches.getOrLoad(
-      JSON.stringify([query, requestedLimit]),
-      (loadSignal) => search(query, loadSignal, requestedLimit),
-      () => false,
-      signal,
-    );
+  return {
+    ...provider,
+    search(params) {
+      const requestedLimit = normalizeSearchProviderLimit(
+        params.numSearchResults ?? params.limit,
+      );
+      return searches.getOrLoad(
+        JSON.stringify([
+          params.query,
+          requestedLimit,
+          params.recency,
+          params.maxOutputTokens,
+          params.temperature,
+        ]),
+        (loadSignal) => provider.search({
+          ...params,
+          limit: requestedLimit,
+          numSearchResults: requestedLimit,
+          signal: loadSignal,
+        }),
+        () => false,
+        params.signal,
+      );
+    },
   };
 }
 
-export function normalizeSearchResults(
-  candidates: readonly SearchResultCandidate[],
+export function normalizeSearchSources(
+  candidates: readonly SearchSourceCandidate[],
   limit = DEFAULT_PROVIDER_SEARCH_LIMIT,
-): SearchResult[] {
-  const results: SearchResult[] = [];
+): SearchSource[] {
+  const sources: SearchSource[] = [];
   const seen = new Set<string>();
 
   for (const candidate of candidates) {
-    const link = normalizeResultUrl(candidate.link);
-    if (!link || seen.has(link)) continue;
-    seen.add(link);
+    const url = normalizeResultUrl(candidate.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
 
-    const title = normalizeText(candidate.title) || link;
+    const title = normalizeText(candidate.title) || url;
     const snippet = normalizeText(candidate.snippet);
-    results.push({
-      link,
+    const publishedDate = normalizeText(candidate.publishedDate);
+    const author = normalizeText(candidate.author);
+    sources.push({
+      url,
       title: title.slice(0, MAX_RESULT_TITLE_LENGTH),
-      snippet: snippet.slice(0, MAX_RESULT_SNIPPET_LENGTH),
+      ...(snippet
+        ? { snippet: snippet.slice(0, MAX_RESULT_SNIPPET_LENGTH) }
+        : {}),
+      ...(publishedDate ? { publishedDate } : {}),
+      ...(typeof candidate.ageSeconds === "number" &&
+      Number.isFinite(candidate.ageSeconds) &&
+      candidate.ageSeconds >= 0
+        ? { ageSeconds: candidate.ageSeconds }
+        : {}),
+      ...(author ? { author } : {}),
     });
-    if (results.length >= limit) break;
+    if (sources.length >= limit) break;
   }
 
-  return results;
+  return sources;
 }
 
 export function normalizeSearchProviderLimit(

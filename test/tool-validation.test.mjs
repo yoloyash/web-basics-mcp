@@ -62,7 +62,7 @@ test("registers only the two basic web tools", async () => {
   assert.equal(fetchTool.outputSchema.type, "object");
   assert.equal(searchTool.outputSchema.type, "object");
   assert.ok(fetchTool.outputSchema.properties.url);
-  assert.ok(searchTool.outputSchema.properties.results);
+  assert.ok(searchTool.outputSchema.properties.response);
   assert.deepEqual(fetchTool.annotations, {
     readOnlyHint: true,
     destructiveHint: false,
@@ -78,7 +78,14 @@ test("registers only the two basic web tools", async () => {
     "start_index",
     "url",
   ]);
-  assert.deepEqual(Object.keys(searchTool.inputSchema.properties).sort(), ["limit", "query"]);
+  assert.deepEqual(Object.keys(searchTool.inputSchema.properties).sort(), [
+    "limit",
+    "max_tokens",
+    "num_search_results",
+    "query",
+    "recency",
+    "temperature",
+  ]);
 });
 
 test("reports the installed package version through MCP", () => {
@@ -102,17 +109,18 @@ test("web_search returns structured MCP results and compatible text", async () =
   });
 
   assert.deepEqual(result.structuredContent, {
-    results: [
-      {
-        link: "https://example.com/result",
+    response: {
+      provider: "searxng",
+      sources: [{
+        url: "https://example.com/result",
         title: "Example result",
         snippet: "Example snippet",
-      },
-    ],
+      }],
+    },
   });
-  assert.deepEqual(
-    JSON.parse(result.content[0].text),
-    result.structuredContent.results,
+  assert.equal(
+    result.content[0].text,
+    "[1] Example result\n    https://example.com/result\n    Example snippet",
   );
 });
 
