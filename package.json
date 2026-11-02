@@ -47,7 +47,8 @@
     "searxng",
     "web-search",
     "fetch",
-    "reddit"
+    "reddit",
+    "youtube"
   ],
   "engines": {
     "node": ">=20.18.1"

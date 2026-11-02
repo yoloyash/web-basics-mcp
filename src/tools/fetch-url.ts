@@ -15,6 +15,7 @@ const extractorSchema = z.enum([
   "readability",
   "unpdf",
   "reddit",
+  "youtube",
   "text",
   "image",
 ]);
@@ -91,7 +92,7 @@ export default function registerFetchUrl(server: McpServer, webBasics: WebBasics
     "fetch_url",
     {
       description:
-        "Fetch one public HTTP(S) URL. Returns clean Markdown for pages and Reddit posts, extracted PDF text, direct text data, or a supported image. Use start_index to continue truncated text.",
+        "Fetch one public HTTP(S) URL. Returns clean Markdown for pages, Reddit posts, and YouTube video transcripts, extracted PDF text, direct text data, or a supported image. Use start_index to continue truncated text.",
       inputSchema: {
         url: z.string().url().describe("Target URL"),
         start_index: z.number().int().min(0).default(0).describe("Character index to start text content from"),
