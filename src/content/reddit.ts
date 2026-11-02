@@ -1,37 +1,21 @@
-import { extractHtmlMarkdown, type HtmlCandidate } from "./html.js";
+import { htmlFragmentToMarkdown } from "./html.js";
+import type { FetchPublicHttpOptions } from "../lib/http.js";
 import {
   fetchRedditPost,
-  redditResponseCachePolicy,
-  REDDIT_USER_AGENT,
-  requireRedditPostUrl,
   type RedditComment,
   type RedditFetchResult,
 } from "../lib/reddit.js";
-import {
-  fetchPublicHttpUrl,
-  readBytesCapped,
-  type FetchPublicHttpOptions,
-} from "../lib/http.js";
-
-const FETCH_TIMEOUT_MS = 15000;
-const MAX_REDDIT_HTML_BYTES = 5 * 1024 * 1024;
 
 type RedditContentOptions = Pick<
   FetchPublicHttpOptions,
   "fetchImpl" | "lookupHost" | "retryDelayMs" | "signal" | "wait"
-> & {
-  extractHtml?: (
-    html: string,
-    finalUrl: string,
-  ) => Promise<HtmlCandidate & { fallbackReason?: string }>;
-};
+>;
 
 export interface RedditMarkdown {
   title: string;
   content: string;
   wordCount: number;
   extractor: "reddit";
-  fallbackReason?: string;
 }
 
 export async function fetchRedditContent(
@@ -43,39 +27,6 @@ export async function fetchRedditContent(
   finalUrl: string;
   result: RedditMarkdown & { contentType: string };
 }> {
-  const postUrl = requireRedditPostUrl(url);
-
-  try {
-    const { res, finalUrl } = await fetchPublicHttpUrl(postUrl.oldRedditUrl, {
-      ...options,
-      headers: { Accept: "text/html, application/xhtml+xml" },
-      maxTransientRetries: 0,
-      timeoutMs: FETCH_TIMEOUT_MS,
-      userAgent: REDDIT_USER_AGENT,
-    });
-    const html = new TextDecoder("utf-8", { fatal: false }).decode(
-      await readBytesCapped(res, MAX_REDDIT_HTML_BYTES, options.signal),
-    );
-    options.signal?.throwIfAborted();
-    const extracted = await (options.extractHtml ?? extractHtmlMarkdown)(html, finalUrl);
-    options.signal?.throwIfAborted();
-
-    return {
-      ...redditResponseCachePolicy(res),
-      finalUrl: postUrl.canonicalUrl,
-      result: {
-        title: extracted.title,
-        content: extracted.content,
-        wordCount: extracted.wordCount,
-        contentType: res.headers.get("content-type")?.split(";")[0]?.trim() || "text/html",
-        extractor: "reddit",
-        fallbackReason: extracted.fallbackReason,
-      },
-    };
-  } catch {
-    options.signal?.throwIfAborted();
-  }
-
   const redditPost = await fetchRedditPost(url, options);
   options.signal?.throwIfAborted();
   const content = formatRedditMarkdown(redditPost);
@@ -95,6 +46,7 @@ export async function fetchRedditContent(
 }
 
 export function formatRedditMarkdown(result: RedditFetchResult): string {
+  const body = renderBody(result.post.contentHtml, result.post.contentText);
   const lines = [
     `# ${singleLine(result.post.title || "Reddit post")}`,
     "",
@@ -103,12 +55,13 @@ export function formatRedditMarkdown(result: RedditFetchResult): string {
     result.subreddit ? `Subreddit: r/${singleLine(result.subreddit)}` : undefined,
     result.post.author ? `Author: ${singleLine(result.post.author)}` : undefined,
     result.post.published ? `Published: ${singleLine(result.post.published)}` : undefined,
+    result.post.externalUrl ? `Link: ${singleLine(result.post.externalUrl)}` : undefined,
     "",
     "## Post",
     "",
-    result.post.content || "No post text returned by Reddit RSS.",
+    body || (result.post.externalUrl ? "Link post without text." : "No post text returned by Reddit."),
     "",
-    "## Comments",
+    `## Comments (${result.comments.length})`,
     "",
     ...formatComments(result.comments),
   ];
@@ -117,7 +70,7 @@ export function formatRedditMarkdown(result: RedditFetchResult): string {
 }
 
 function formatComments(comments: RedditComment[]): string[] {
-  if (comments.length === 0) return ["No comments returned by Reddit RSS."];
+  if (comments.length === 0) return ["No comments returned by Reddit."];
 
   return comments.flatMap((comment, index) => {
     const lines = [
@@ -126,11 +79,21 @@ function formatComments(comments: RedditComment[]): string[] {
       comment.published ? `Published: ${singleLine(comment.published)}` : undefined,
       comment.link ? `Link: ${singleLine(comment.link)}` : undefined,
       comment.published || comment.link ? "" : undefined,
-      comment.content || "No comment text returned by Reddit RSS.",
+      renderBody(comment.contentHtml, comment.contentText) || "No comment text returned by Reddit.",
     ];
 
     return [...lines.filter((line): line is string => line !== undefined), ""];
   });
+}
+
+function renderBody(html: string, text: string): string {
+  try {
+    const markdown = htmlFragmentToMarkdown(html);
+    if (markdown) return markdown;
+  } catch {
+    // Fall through to the plain-text snippet when the fragment cannot be converted.
+  }
+  return text.trim();
 }
 
 function formatCommentTitle(comment: RedditComment, index: number): string {

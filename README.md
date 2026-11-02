@@ -126,7 +126,7 @@ Fetches one public HTTP(S) URL.
 
 Supports readable web pages, PDFs, direct text formats, Reddit posts, and PNG, JPEG, WebP, or GIF images. When text is truncated, call the tool again with `next_start_index`.
 
-Reddit posts use public old Reddit HTML for the rendered post and comments, with RSS as a fallback. Successful responses are cached by post ID for up to one hour while respecting stricter upstream cache directives.
+Reddit posts (`reddit.com/r/.../comments/<id>/...`, `reddit.com/comments/<id>`, and `redd.it/<id>` links) are read from Reddit's public Atom feed, which is the only route Reddit still serves without a login. The result contains the post body, the outbound link for link posts, and top-level comments as Markdown. Reddit throttles anonymous feed requests to about one per minute per IP; a throttled call returns an HTTP 429 error that states how many seconds to wait. Successful responses are cached by post ID for up to one hour while respecting stricter upstream cache directives.
 
 Both tools expose MCP output schemas and return structured content alongside text content.
 
