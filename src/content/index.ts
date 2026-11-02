@@ -1,8 +1,9 @@
 import { extractHtmlMarkdown, type HtmlMarkdown } from "./html.js";
 import { extractPdfMarkdown, type PdfMarkdown } from "./pdf.js";
 import type { RedditMarkdown } from "./reddit.js";
+import type { YouTubeMarkdown } from "./youtube.js";
 
-type ExtractedReadableContent = (HtmlMarkdown | PdfMarkdown | RedditMarkdown | TextContent) & {
+type ExtractedReadableContent = (HtmlMarkdown | PdfMarkdown | RedditMarkdown | TextContent | YouTubeMarkdown) & {
   contentType: string;
 };
 

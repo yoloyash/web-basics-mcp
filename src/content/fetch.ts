@@ -4,9 +4,11 @@ import {
   type ExtractedContent,
 } from "./index.js";
 import { fetchRedditContent } from "./reddit.js";
+import { fetchYouTubeContent } from "./youtube.js";
 import { TtlLruCache } from "../lib/cache.js";
 import { isRedditUrl, redditPostCacheKey } from "../lib/reddit.js";
 import { fetchPublicHttpUrl, readBytesCapped } from "../lib/http.js";
+import { isYouTubeUrl, youtubeVideoCacheKey } from "../lib/youtube.js";
 
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_FETCH_BYTES = 15 * 1024 * 1024;
@@ -63,6 +65,9 @@ async function fetchUrlContentUncached(
   if (isRedditUrl(url)) {
     return fetchRedditContent(url, { signal });
   }
+  if (isYouTubeUrl(url)) {
+    return fetchYouTubeContent(url, { signal });
+  }
 
   const { res, finalUrl } = await fetchPublicHttpUrl(url, { signal });
   const responseContentType = res.headers.get("content-type");
@@ -84,6 +89,9 @@ async function fetchUrlContentUncached(
 function normalizeCacheUrl(rawUrl: string): string {
   if (isRedditUrl(rawUrl)) {
     return redditPostCacheKey(rawUrl);
+  }
+  if (isYouTubeUrl(rawUrl)) {
+    return youtubeVideoCacheKey(rawUrl);
   }
 
   try {

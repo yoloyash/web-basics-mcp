@@ -168,6 +168,16 @@ test("fetch_url rejects non-post Reddit URLs", async () => {
   assert.match(result.content[0].text, /^validation: URL must be a Reddit post URL/);
 });
 
+test("fetch_url rejects non-video YouTube URLs", async () => {
+  const result = await client.callTool({
+    name: "fetch_url",
+    arguments: { url: "https://www.youtube.com/@rickastley" },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^validation: URL must be a YouTube video URL/);
+});
+
 function stringEnvironment(env) {
   return Object.fromEntries(
     Object.entries(env).filter((entry) => typeof entry[1] === "string"),

@@ -124,9 +124,11 @@ Fetches one public HTTP(S) URL.
 - `start_index`: optional character offset; defaults to 0
 - `max_length`: optional character limit from 1 to 20,000; defaults to 8,000
 
-Supports readable web pages, PDFs, direct text formats, Reddit posts, and PNG, JPEG, WebP, or GIF images. When text is truncated, call the tool again with `next_start_index`.
+Supports readable web pages, PDFs, direct text formats, Reddit posts, YouTube video transcripts, and PNG, JPEG, WebP, or GIF images. When text is truncated, call the tool again with `next_start_index`.
 
 Reddit posts (`reddit.com/r/.../comments/<id>/...`, `reddit.com/comments/<id>`, and `redd.it/<id>` links) are read from Reddit's public Atom feed, which is the only route Reddit still serves without a login. The result contains the post body, the outbound link for link posts, and top-level comments as Markdown. Reddit throttles anonymous feed requests to about one per minute per IP; a throttled call returns an HTTP 429 error that states how many seconds to wait. Successful responses are cached by post ID for up to one hour while respecting stricter upstream cache directives.
+
+YouTube video URLs (`watch?v=`, `youtu.be`, `shorts`, `embed`, and `live` forms) return the title, channel, duration, description, and a timestamped transcript built from YouTube's public caption tracks. Manual English captions are preferred, then automatic English captions, then the first manual track in any language. Videos without caption tracks return their metadata and a note that no transcript is available. Results are cached by video ID for up to one hour.
 
 Both tools expose MCP output schemas and return structured content alongside text content.
 

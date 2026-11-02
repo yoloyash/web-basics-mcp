@@ -72,7 +72,7 @@ export interface FetchTextResult {
   content: string;
   wordCount: number;
   contentType: string;
-  extractor: "defuddle" | "readability" | "unpdf" | "reddit" | "text";
+  extractor: "defuddle" | "readability" | "unpdf" | "reddit" | "youtube" | "text";
   startIndex: number;
   returnedChars: number;
   totalChars: number;
