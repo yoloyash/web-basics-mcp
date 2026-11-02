@@ -12,7 +12,7 @@ src/
 |-- server.ts      # MCP server factory
 |-- tools/         # MCP adapters
 |-- lib/           # HTTP, search, cache, env, and error helpers
-`-- content/       # HTML, PDF, image, Reddit, YouTube, and text extraction
+`-- content/       # HTML, PDF, image, Reddit, X, YouTube, and text extraction
 
 test/               # Node test runner tests and fixtures
 docs/               # maintainer runbooks
@@ -32,6 +32,7 @@ Keep MCP adapters thin. Shared behavior belongs in `src/api.ts`, `src/lib/`, or 
 - Keep the completed-result search cache limited to SearXNG. For Brave Search and keyless providers, coalesce only concurrent identical requests and do not retain completed responses.
 - For Reddit post URLs, fetch only the public Atom feed (`.rss`). Old Reddit redirects logged-out clients to a login page and `.json` endpoints return block pages, so do not add HTML, `.json`, or browser user-agent spoofing paths. Reddit throttles anonymous feed requests to about one per minute per IP: never retry a 429 automatically and surface the reset window in the error. Cache successful results by canonical post ID for at most one hour, honor stricter upstream cache directives, and do not require credentials.
 - For YouTube video URLs, fetch the video details and caption track list from the InnerTube player endpoint with the `ANDROID` client identity and its matching user agent, which is the client whose caption URLs still work without a proof-of-origin token. Then fetch only the selected caption track's timed-text XML. Prefer manual English captions, then automatic English, then the first manual track, then any track. Do not scrape watch pages, do not use third-party transcript services, and do not require credentials. Cache results by video ID for at most one hour.
+- For X post URLs, fetch the public syndication endpoint (`cdn.syndication.twimg.com/tweet-result`, with the token the embed widget derives from the post ID) first and fall back to the official oEmbed endpoint (`publish.x.com/oembed`) only when that fails, reporting the fallback in `fallbackReason`. Do not use third-party mirrors such as fxtwitter or vxtwitter, do not scrape x.com pages, and do not require credentials. Both endpoints truncate long posts for logged-out clients: say so in the output instead of adding workarounds. Cache by post ID with the default fetch cache and honor upstream `no-store` directives.
 - Load runtime configuration from the package-root `.env`, not the MCP client's working directory.
 - `SEARCH_PROVIDER` selects `auto`, `searxng`, `brave`, `firecrawl`, `exa`, or `duckduckgo`; SearXNG remains the default and explicit selections are terminal. Automatic mode uses configured Brave and SearXNG providers, then adds Firecrawl, Exa, and DuckDuckGo only when `SEARCH_ALLOW_KEYLESS_FALLBACK=true`. `SEARXNG_URL` points to user-managed infrastructure, while Brave uses its fixed official endpoint and `BRAVE_SEARCH_API_KEY`. Do not add bundled search infrastructure, proxy/VPN routing, browser automation, or answer synthesis.
 

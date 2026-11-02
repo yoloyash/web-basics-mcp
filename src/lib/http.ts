@@ -89,6 +89,21 @@ export function isRetryableHttpStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
+/** False when `Cache-Control` forbids reuse with `no-store`, `no-cache`, or `max-age=0`. */
+export function responseAllowsCaching(res: Response): boolean {
+  const directives = (res.headers.get("cache-control") ?? "")
+    .toLowerCase()
+    .split(",")
+    .map((directive) => directive.trim());
+
+  return !directives.some(
+    (directive) =>
+      directive === "no-cache" ||
+      directive === "no-store" ||
+      /^max-age\s*=\s*0$/u.test(directive),
+  );
+}
+
 async function fetchPublicHttpUrlWithRedirects(
   rawUrl: string,
   config: FetchConfig,

@@ -4,11 +4,15 @@ import {
   type ExtractedContent,
 } from "./index.js";
 import { fetchRedditContent } from "./reddit.js";
+import { fetchXContent } from "./x.js";
 import { fetchYouTubeContent } from "./youtube.js";
 import { TtlLruCache } from "../lib/cache.js";
 import { isRedditUrl, redditPostCacheKey } from "../lib/reddit.js";
-import { fetchPublicHttpUrl, readBytesCapped } from "../lib/http.js";
+import { fetchPublicHttpUrl, readBytesCapped, responseAllowsCaching } from "../lib/http.js";
+import { isXUrl, xPostCacheKey } from "../lib/x.js";
 import { isYouTubeUrl, youtubeVideoCacheKey } from "../lib/youtube.js";
+
+export { responseAllowsCaching };
 
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_FETCH_BYTES = 15 * 1024 * 1024;
@@ -65,6 +69,9 @@ async function fetchUrlContentUncached(
   if (isRedditUrl(url)) {
     return fetchRedditContent(url, { signal });
   }
+  if (isXUrl(url)) {
+    return fetchXContent(url, { signal });
+  }
   if (isYouTubeUrl(url)) {
     return fetchYouTubeContent(url, { signal });
   }
@@ -90,6 +97,9 @@ function normalizeCacheUrl(rawUrl: string): string {
   if (isRedditUrl(rawUrl)) {
     return redditPostCacheKey(rawUrl);
   }
+  if (isXUrl(rawUrl)) {
+    return xPostCacheKey(rawUrl);
+  }
   if (isYouTubeUrl(rawUrl)) {
     return youtubeVideoCacheKey(rawUrl);
   }
@@ -106,18 +116,4 @@ function normalizeCacheUrl(rawUrl: string): string {
 function fetchedContentWeight(value: FetchedUrlContent): number {
   if (value.result.extractor === "image") return value.result.byteLength;
   return value.result.content.length * 2 + 1024;
-}
-
-export function responseAllowsCaching(res: Response): boolean {
-  const directives = (res.headers.get("cache-control") ?? "")
-    .toLowerCase()
-    .split(",")
-    .map((directive) => directive.trim());
-
-  return !directives.some(
-    (directive) =>
-      directive === "no-cache" ||
-      directive === "no-store" ||
-      /^max-age\s*=\s*0$/u.test(directive),
-  );
 }

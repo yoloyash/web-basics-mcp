@@ -48,6 +48,7 @@
     "web-search",
     "fetch",
     "reddit",
+    "twitter",
     "youtube"
   ],
   "engines": {
