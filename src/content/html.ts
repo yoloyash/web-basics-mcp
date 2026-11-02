@@ -116,6 +116,13 @@ export function extractReadabilityMarkdown(html: string, finalUrl: string): Html
   };
 }
 
+/** Converts an HTML fragment (no document wrapper needed) to normalized Markdown. */
+export function htmlFragmentToMarkdown(html: string): string {
+  const fragment = html.trim();
+  if (!fragment) return "";
+  return normalizeMarkdown(turndown.turndown(fragment));
+}
+
 function primaryFallbackReason(content: string, totalPageTextChars: number): string {
   if (content.length < MIN_PRIMARY_CONTENT_CHARS && totalPageTextChars >= MIN_PRIMARY_CONTENT_CHARS * 2) {
     return "Defuddle returned too little content for the page";

@@ -55,14 +55,26 @@ interface FetchConfig {
 }
 
 export class HttpStatusError extends Error {
+  readonly headers: Headers;
   readonly retryable: boolean;
   readonly status: number;
 
-  constructor(status: number) {
+  constructor(status: number, headers: Headers = new Headers()) {
     super(`HTTP status ${status}`);
     this.name = "HttpStatusError";
+    this.headers = headers;
     this.status = status;
     this.retryable = isRetryableHttpStatus(status);
+  }
+
+  /** Seconds suggested by a numeric or HTTP-date `Retry-After` header, if present. */
+  get retryAfterSeconds(): number | undefined {
+    const value = this.headers.get("retry-after")?.trim();
+    if (!value) return undefined;
+    if (/^\d+$/u.test(value)) return Number(value);
+    const date = Date.parse(value);
+    if (!Number.isFinite(date)) return undefined;
+    return Math.max(0, Math.ceil((date - Date.now()) / 1000));
   }
 }
 
@@ -119,7 +131,7 @@ async function fetchPublicHttpUrlWithRedirects(
         await config.wait(delayMs, config.signal);
         continue;
       }
-      throw new HttpStatusError(res.status);
+      throw new HttpStatusError(res.status, res.headers);
     }
 
     return { res, finalUrl: url.toString() };

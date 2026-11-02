@@ -98,6 +98,26 @@ test("can disable transient HTTP status retries", async () => {
   assert.equal(calls, 1);
 });
 
+test("exposes response headers and Retry-After on HTTP status errors", async () => {
+  await assert.rejects(
+    () =>
+      fetchPublicHttpUrl("https://example.com/limited", {
+        fetchImpl: async () =>
+          new Response("", { status: 429, headers: { "retry-after": "17", "x-ratelimit-reset": "3" } }),
+        lookupHost: publicLookup,
+        maxTransientRetries: 0,
+        wait: noWait,
+      }),
+    (err) => {
+      assert.equal(err.name, "HttpStatusError");
+      assert.equal(err.message, "HTTP status 429");
+      assert.equal(err.headers.get("x-ratelimit-reset"), "3");
+      assert.equal(err.retryAfterSeconds, 17);
+      return true;
+    },
+  );
+});
+
 test("marks exhausted transient HTTP status as retryable", async () => {
   let calls = 0;
 
