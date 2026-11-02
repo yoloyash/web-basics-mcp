@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.5.0...v0.6.0) (2026-11-02)
+
+
+### Features
+
+* fetch X posts ([#27](https://github.com/yoloyash/web-basics-mcp/issues/27)) ([e9a4d54](https://github.com/yoloyash/web-basics-mcp/commit/e9a4d5464d27161a6d427fa534792ad7546cd676))
+* fetch YouTube transcripts ([#26](https://github.com/yoloyash/web-basics-mcp/issues/26)) ([0b43c5e](https://github.com/yoloyash/web-basics-mcp/commit/0b43c5e6abd7998145bc38b145140e0643af4bfb))
+
+
+### Bug Fixes
+
+* read Reddit posts from the Atom feed ([#25](https://github.com/yoloyash/web-basics-mcp/issues/25)) ([e11ba94](https://github.com/yoloyash/web-basics-mcp/commit/e11ba9452b9a87fe26f8c2240e7cbea99ca68690))
+
 ## [0.5.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.4.0...v0.5.0) (2026-08-26)
 
 
