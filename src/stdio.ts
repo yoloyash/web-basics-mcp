@@ -13,6 +13,8 @@ const webBasics = createWebBasics({
     process.env.SEARCH_ALLOW_KEYLESS_FALLBACK,
   ),
   braveApiKey: process.env.BRAVE_SEARCH_API_KEY,
+  keenableApiKey: process.env.KEENABLE_API_KEY,
+  keenableClientTitle: process.env.KEENABLE_CLIENT_TITLE,
   searchBackend,
   searxngUrl: process.env.SEARXNG_URL,
 });
@@ -29,10 +31,11 @@ function configuredSearchBackend(value: string | undefined): SearchBackend {
     backend !== "duckduckgo" &&
     backend !== "exa" &&
     backend !== "firecrawl" &&
+    backend !== "keenable" &&
     backend !== "searxng"
   ) {
     throw new Error(
-      "SEARCH_PROVIDER must be auto, brave, searxng, firecrawl, exa, or duckduckgo",
+      "SEARCH_PROVIDER must be auto, brave, searxng, keenable, firecrawl, exa, or duckduckgo",
     );
   }
   return backend;

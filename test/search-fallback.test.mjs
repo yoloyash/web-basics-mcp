@@ -119,7 +119,7 @@ test("does not fall through after caller cancellation", async () => {
 test("requires configured providers or keyless permission for automatic search", () => {
   assert.throws(
     () => createWebBasics({ searchBackend: "auto" }),
-    /requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled/,
+    /requires braveApiKey, searxngUrl, or keenableApiKey unless allowKeylessFallback is enabled/,
   );
   assert.doesNotThrow(() => createWebBasics({
     allowKeylessFallback: true,
@@ -133,10 +133,14 @@ test("requires configured providers or keyless permission for automatic search",
     searchBackend: "auto",
     searxngUrl: "https://search.example",
   }));
+  assert.doesNotThrow(() => createWebBasics({
+    keenableApiKey: "keen_test",
+    searchBackend: "auto",
+  }));
 });
 
 test("constructs explicit keyless backends without automatic permission", () => {
-  for (const searchBackend of ["firecrawl", "exa", "duckduckgo"]) {
+  for (const searchBackend of ["keenable", "firecrawl", "exa", "duckduckgo"]) {
     assert.doesNotThrow(() => createWebBasics({ searchBackend }));
   }
 });

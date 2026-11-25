@@ -5,6 +5,7 @@ import {
   createDuckDuckGoSearchProvider,
   createExaSearchProvider,
   createFirecrawlSearchProvider,
+  createKeenableSearchProvider,
   SearchProviderError,
   createWebBasics,
   fetchUrl,
@@ -17,6 +18,7 @@ test("exports a side-effect-free API and MCP server factory", () => {
   assert.equal(typeof createDuckDuckGoSearchProvider, "function");
   assert.equal(typeof createExaSearchProvider, "function");
   assert.equal(typeof createFirecrawlSearchProvider, "function");
+  assert.equal(typeof createKeenableSearchProvider, "function");
   assert.equal(typeof SearchProviderError, "function");
   assert.equal(typeof createWebBasics, "function");
   assert.equal(typeof webSearch, "function");

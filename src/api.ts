@@ -6,6 +6,10 @@ import { validationError } from "./lib/errors.js";
 import { createExaSearchProvider } from "./lib/exa-search.js";
 import { createFirecrawlSearchProvider } from "./lib/firecrawl-search.js";
 import {
+  createKeenableSearchProvider,
+  type KeenableSearchOptions,
+} from "./lib/keenable-search.js";
+import {
   normalizeQuery,
   searchSearxng,
   type NormalizedQuery,
@@ -103,6 +107,8 @@ export interface WebBasics {
 export interface WebBasicsOptions {
   allowKeylessFallback?: boolean;
   braveApiKey?: string;
+  keenableApiKey?: string;
+  keenableClientTitle?: string;
   searchBackend?: SearchBackend;
   searchProvider?: SearchProvider;
   searxngUrl?: string;
@@ -124,6 +130,8 @@ export {
   createDuckDuckGoSearchProvider,
   createExaSearchProvider,
   createFirecrawlSearchProvider,
+  createKeenableSearchProvider,
+  type KeenableSearchOptions,
 };
 
 export function createSearxngSearchProvider(
@@ -203,6 +211,15 @@ function createConfiguredSearchCandidates(
         provider: createSearxngSearchProvider(options.searxngUrl),
       });
     }
+    if (options.keenableApiKey?.trim()) {
+      candidates.push({
+        explicit: false,
+        provider: createKeenableSearchProvider({
+          apiKey: options.keenableApiKey,
+          clientTitle: options.keenableClientTitle,
+        }),
+      });
+    }
     if (options.allowKeylessFallback) {
       candidates.push(
         { explicit: false, provider: createFirecrawlSearchProvider() },
@@ -212,7 +229,7 @@ function createConfiguredSearchCandidates(
     }
     if (candidates.length === 0) {
       throw validationError(
-        "Automatic search requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled",
+        "Automatic search requires braveApiKey, searxngUrl, or keenableApiKey unless allowKeylessFallback is enabled",
       );
     }
     return candidates;
@@ -237,6 +254,15 @@ function createConfiguredSearchCandidates(
   }
   if (backend === "duckduckgo") {
     return [{ explicit: true, provider: createDuckDuckGoSearchProvider() }];
+  }
+  if (backend === "keenable") {
+    return [{
+      explicit: true,
+      provider: createKeenableSearchProvider({
+        apiKey: options.keenableApiKey,
+        clientTitle: options.keenableClientTitle,
+      }),
+    }];
   }
   throw validationError(`Unsupported search backend: ${String(backend)}`);
 }
