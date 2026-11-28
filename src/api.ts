@@ -6,6 +6,10 @@ import { validationError } from "./lib/errors.js";
 import { createExaSearchProvider } from "./lib/exa-search.js";
 import { createFirecrawlSearchProvider } from "./lib/firecrawl-search.js";
 import {
+  createKeenableSearchProvider,
+  type KeenableSearchOptions,
+} from "./lib/keenable-search.js";
+import {
   normalizeQuery,
   searchSearxng,
   type NormalizedQuery,
@@ -103,6 +107,8 @@ export interface WebBasics {
 export interface WebBasicsOptions {
   allowKeylessFallback?: boolean;
   braveApiKey?: string;
+  keenableApiKey?: string;
+  keenableClientTitle?: string;
   searchBackend?: SearchBackend;
   searchProvider?: SearchProvider;
   searxngUrl?: string;
@@ -124,6 +130,8 @@ export {
   createDuckDuckGoSearchProvider,
   createExaSearchProvider,
   createFirecrawlSearchProvider,
+  createKeenableSearchProvider,
+  type KeenableSearchOptions,
 };
 
 export function createSearxngSearchProvider(
@@ -237,6 +245,15 @@ function createConfiguredSearchCandidates(
   }
   if (backend === "duckduckgo") {
     return [{ explicit: true, provider: createDuckDuckGoSearchProvider() }];
+  }
+  if (backend === "keenable") {
+    return [{
+      explicit: true,
+      provider: createKeenableSearchProvider({
+        apiKey: options.keenableApiKey,
+        clientTitle: options.keenableClientTitle,
+      }),
+    }];
   }
   throw validationError(`Unsupported search backend: ${String(backend)}`);
 }

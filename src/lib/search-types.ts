@@ -1,6 +1,7 @@
 export const SEARCH_PROVIDER_OPTIONS = [
   { value: "auto", label: "Auto" },
   { value: "brave", label: "Brave" },
+  { value: "keenable", label: "Keenable" },
   { value: "searxng", label: "SearXNG" },
   { value: "firecrawl", label: "Firecrawl" },
   { value: "exa", label: "Exa" },

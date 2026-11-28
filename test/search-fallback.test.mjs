@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import dnsPromises from "node:dns/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { mock, test } from "node:test";
 import {
   createWebBasics,
   SearchChainError,
@@ -133,10 +135,69 @@ test("requires configured providers or keyless permission for automatic search",
     searchBackend: "auto",
     searxngUrl: "https://search.example",
   }));
+  assert.throws(
+    () => createWebBasics({ keenableApiKey: "keen_test", searchBackend: "auto" }),
+    /requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled/,
+  );
+});
+
+test("automatic search never sends a request to Keenable", async (t) => {
+  const hosts = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    hosts.push(new URL(String(url)).hostname);
+    return new Response("{}", {
+      headers: { "content-type": "application/json" },
+      status: 400,
+    });
+  });
+  mock.method(dnsPromises, "lookup", async () => [{ address: "93.184.216.34", family: 4 }]);
+  syncBuiltinESMExports();
+  t.after(() => {
+    mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+
+  const webBasics = createWebBasics({
+    allowKeylessFallback: true,
+    braveApiKey: "brave-test",
+    keenableApiKey: "keen_test",
+    keenableClientTitle: "web-basics-test",
+    searchBackend: "auto",
+    searxngUrl: "https://search.example",
+  });
+  await assert.rejects(
+    () => webBasics.webSearch({ query: "auto never reaches keenable" }),
+    SearchChainError,
+  );
+
+  assert.ok(hosts.includes("api.search.brave.com"), "the configured providers did run");
+  assert.ok(hosts.length > 1, "the chain fell through to its other providers");
+  assert.deepEqual(hosts.filter((host) => host.endsWith("keenable.ai")), []);
+});
+
+test("an explicitly selected Keenable backend still reaches Keenable", async (t) => {
+  const urls = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    urls.push(String(url));
+    return new Response(JSON.stringify({ results: [] }), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+  mock.method(dnsPromises, "lookup", async () => [{ address: "93.184.216.34", family: 4 }]);
+  syncBuiltinESMExports();
+  t.after(() => {
+    mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+
+  const webBasics = createWebBasics({ keenableApiKey: "keen_test", searchBackend: "keenable" });
+  await assert.rejects(() => webBasics.webSearch({ query: "explicit keenable" }), SearchChainError);
+
+  assert.deepEqual(urls, ["https://api.keenable.ai/v1/search"]);
 });
 
 test("constructs explicit keyless backends without automatic permission", () => {
-  for (const searchBackend of ["firecrawl", "exa", "duckduckgo"]) {
+  for (const searchBackend of ["keenable", "firecrawl", "exa", "duckduckgo"]) {
     assert.doesNotThrow(() => createWebBasics({ searchBackend }));
   }
 });

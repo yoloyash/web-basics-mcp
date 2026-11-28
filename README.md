@@ -55,7 +55,7 @@ For another stdio MCP client:
 }
 ```
 
-`SEARCH_PROVIDER` accepts `auto`, `brave`, `searxng`, `firecrawl`, `exa`, or `duckduckgo`. It defaults to `searxng`, and explicitly selected SearXNG defaults to `http://127.0.0.1:8088`. In automatic mode, Brave and SearXNG are included only when their corresponding configuration is set. `SEARCH_ALLOW_KEYLESS_FALLBACK=true` appends Firecrawl, Exa, and DuckDuckGo; it has no effect on explicitly selected providers.
+`SEARCH_PROVIDER` accepts `auto`, `brave`, `searxng`, `keenable`, `firecrawl`, `exa`, or `duckduckgo`. It defaults to `searxng`, and explicitly selected SearXNG defaults to `http://127.0.0.1:8088`. In automatic mode, Brave and SearXNG are included only when their corresponding configuration is set. `SEARCH_ALLOW_KEYLESS_FALLBACK=true` appends Firecrawl, Exa, and DuckDuckGo; it has no effect on explicitly selected providers. Keenable is explicit-only: `auto` never sends a request to it, with or without `KEENABLE_API_KEY`.
 
 Programmatic callers can enable the same policy with `createWebBasics({ searchBackend: "auto", allowKeylessFallback: true })`.
 
@@ -68,7 +68,18 @@ codex mcp add web-basics \
   -- npx -y @yoloyash/web-basics
 ```
 
-Brave uses its official Web Search API. SearXNG searches retain a bounded two-minute cache. Brave and keyless providers coalesce concurrent identical requests but do not retain completed responses.
+To use Keenable Search (opt-in, with an optional `KEENABLE_API_KEY`):
+
+```bash
+codex mcp add web-basics \
+  --env SEARCH_PROVIDER=keenable \
+  --env KEENABLE_API_KEY=your-keenable-api-key \
+  -- npx -y @yoloyash/web-basics
+```
+
+Without `KEENABLE_API_KEY`, explicit `SEARCH_PROVIDER=keenable` calls Keenable's public endpoint with `X-Keenable-Title` (configurable via `KEENABLE_CLIENT_TITLE`, default `web-basics`). Note that Keenable logs both keyed and keyless search requests under its default data policy; only Enterprise zero data retention differs (see [docs.keenable.ai/data-privacy](https://docs.keenable.ai/data-privacy)).
+
+Brave uses its official Web Search API. SearXNG searches retain a bounded two-minute cache. Brave, Keenable, and keyless providers coalesce concurrent identical requests but do not retain completed responses.
 
 ## Tools
 
