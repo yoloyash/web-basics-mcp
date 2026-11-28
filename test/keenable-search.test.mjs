@@ -67,6 +67,7 @@ test("maps keyed Keenable search results onto the public search contract", async
   assert.equal(requests[0].init.headers["X-Keenable-Title"], undefined);
   assert.deepEqual(requests[0].body, {
     max_results: 2,
+    moderation: "moderate",
     published_after: "7d",
     query: "keenable integration query",
   });
@@ -101,6 +102,7 @@ test("uses the public endpoint and X-Keenable-Title when no API key is set", asy
   assert.equal(requests[0].init.headers["X-API-Key"], undefined);
   assert.deepEqual(requests[0].body, {
     max_results: 3,
+    moderation: "moderate",
     query: "public keenable query",
   });
 });

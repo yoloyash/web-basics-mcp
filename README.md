@@ -55,7 +55,7 @@ For another stdio MCP client:
 }
 ```
 
-`SEARCH_PROVIDER` accepts `auto`, `brave`, `searxng`, `keenable`, `firecrawl`, `exa`, or `duckduckgo`. It defaults to `searxng`, and explicitly selected SearXNG defaults to `http://127.0.0.1:8088`. In automatic mode, Brave, SearXNG, and Keenable (when `KEENABLE_API_KEY` is set) are included only when their corresponding configuration is set. `SEARCH_ALLOW_KEYLESS_FALLBACK=true` appends Firecrawl, Exa, and DuckDuckGo; it does not include Keenable and has no effect on explicitly selected providers.
+`SEARCH_PROVIDER` accepts `auto`, `brave`, `searxng`, `keenable`, `firecrawl`, `exa`, or `duckduckgo`. It defaults to `searxng`, and explicitly selected SearXNG defaults to `http://127.0.0.1:8088`. In automatic mode, Brave and SearXNG are included only when their corresponding configuration is set. `SEARCH_ALLOW_KEYLESS_FALLBACK=true` appends Firecrawl, Exa, and DuckDuckGo; it has no effect on explicitly selected providers. Keenable is explicit-only: `auto` never sends a request to it, with or without `KEENABLE_API_KEY`.
 
 Programmatic callers can enable the same policy with `createWebBasics({ searchBackend: "auto", allowKeylessFallback: true })`.
 

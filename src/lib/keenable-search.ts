@@ -92,6 +92,7 @@ async function searchKeenable(
   };
   const body: Record<string, unknown> = {
     max_results: limit,
+    moderation: "moderate",
     query,
   };
   if (recency) body.published_after = RECENCY_MAP[recency];

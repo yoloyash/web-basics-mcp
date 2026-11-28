@@ -211,15 +211,6 @@ function createConfiguredSearchCandidates(
         provider: createSearxngSearchProvider(options.searxngUrl),
       });
     }
-    if (options.keenableApiKey?.trim()) {
-      candidates.push({
-        explicit: false,
-        provider: createKeenableSearchProvider({
-          apiKey: options.keenableApiKey,
-          clientTitle: options.keenableClientTitle,
-        }),
-      });
-    }
     if (options.allowKeylessFallback) {
       candidates.push(
         { explicit: false, provider: createFirecrawlSearchProvider() },
@@ -229,7 +220,7 @@ function createConfiguredSearchCandidates(
     }
     if (candidates.length === 0) {
       throw validationError(
-        "Automatic search requires braveApiKey, searxngUrl, or keenableApiKey unless allowKeylessFallback is enabled",
+        "Automatic search requires braveApiKey or searxngUrl unless allowKeylessFallback is enabled",
       );
     }
     return candidates;
