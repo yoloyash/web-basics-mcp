@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.6.0...v0.7.0) (2026-11-28)
+
+
+### Features
+
+* add opt-in Keenable search provider ([#29](https://github.com/yoloyash/web-basics-mcp/issues/29)) ([545b8e2](https://github.com/yoloyash/web-basics-mcp/commit/545b8e2d2c3561e203f9071fa3a5890a358c63ae))
+
 ## [0.6.0](https://github.com/yoloyash/web-basics-mcp/compare/v0.5.0...v0.6.0) (2026-11-02)
 
 
